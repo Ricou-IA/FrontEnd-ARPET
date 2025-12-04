@@ -7,11 +7,11 @@ export default {
   theme: {
     extend: {
       fontFamily: {
+        'brand': ['Bodoni Moda', 'serif'],
         'serif': ['Instrument Serif', 'serif'],
         'sans': ['Inter', 'sans-serif'],
       },
       colors: {
-        // Palette "Zen" personnalisée
         'arpet': {
           'bg': '#FAFAF9',
           'sidebar': '#F5F5F4',
@@ -20,11 +20,17 @@ export default {
       },
       animation: {
         'slide-down-fade': 'slideDownFade 0.4s ease-out forwards',
+        'physics-sway': 'physicsSway 4s ease-in-out infinite',
       },
       keyframes: {
         slideDownFade: {
           '0%': { opacity: '0', transform: 'translateY(-20px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        physicsSway: {
+          '0%': { transform: 'rotate(1.5deg)' },
+          '50%': { transform: 'rotate(-1.5deg)' },
+          '100%': { transform: 'rotate(1.5deg)' },
         }
       }
     },
