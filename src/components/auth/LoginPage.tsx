@@ -1,10 +1,18 @@
+// ============================================================
+// ARPET - Login Page (Split Card Design)
+// Version: 2.0.0
+// ============================================================
+
 import { useState } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
+import { PlumbBob } from './PlumbBob'
 
 export function LoginPage() {
   const { signIn } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
@@ -23,79 +31,181 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9] flex items-center justify-center px-4">
-      <div className="max-w-md w-full">
-        {/* Logo et titre */}
-        <div className="text-center mb-8">
-          <h1 className="font-serif text-5xl text-stone-800 mb-2">Léa.</h1>
-          <p className="text-stone-500 text-sm">Assistant intelligent pour conducteurs de travaux</p>
+    <div className="min-h-screen flex items-center justify-center px-4 py-8 bg-gray-100 login-bg-pattern">
+      {/* Split Card Container */}
+      <div className="bg-white rounded-2xl shadow-2xl shadow-gray-200/50 w-full max-w-5xl flex flex-col md:flex-row min-h-[600px] overflow-hidden">
+        
+        {/* ========================================= */}
+        {/* Partie GAUCHE : Branding                 */}
+        {/* ========================================= */}
+        <div className="w-full md:w-5/12 p-12 flex flex-col justify-center items-center relative text-center bg-gray-50 border-r border-gray-100 overflow-hidden">
+          {/* Motif subtil de fond */}
+          <div 
+            className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-[0.02]"
+            style={{
+              backgroundImage: 'radial-gradient(#1F2937 1px, transparent 1px)',
+              backgroundSize: '16px 16px'
+            }}
+          />
+          
+          {/* Logo + Fil à plomb */}
+          <div className="relative z-10 mb-8">
+            <h1 className="font-brand text-6xl text-gray-900 font-medium tracking-tight relative inline-block">
+              Arpet
+              <span className="relative inline-block">
+                .
+                {/* Le fil à plomb attaché au point */}
+                <PlumbBob />
+              </span>
+            </h1>
+          </div>
+
+          {/* Tagline */}
+          <blockquote className="max-w-xs mx-auto z-10 relative mt-16">
+            <p className="font-brand text-2xl text-gray-800 leading-snug">
+              "Il cherche les réponses,
+              <br />
+              <span className="font-semibold text-black">vous prenez les décisions."</span>
+            </p>
+          </blockquote>
         </div>
 
-        {/* Formulaire */}
-        <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-8">
-          <h2 className="font-serif text-2xl text-stone-800 mb-6">Connexion</h2>
-
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-lg text-red-600 text-sm">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-stone-700 mb-1">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2 border border-stone-200 rounded-lg focus:outline-none focus:border-stone-400 focus:ring-1 focus:ring-stone-400 transition"
-                placeholder="vous@entreprise.fr"
-                required
-              />
+        {/* ========================================= */}
+        {/* Partie DROITE : Formulaire               */}
+        {/* ========================================= */}
+        <div className="w-full md:w-7/12 bg-white p-12 lg:p-16 flex flex-col justify-center">
+          <div className="max-w-sm mx-auto w-full">
+            {/* Header */}
+            <div className="mb-10">
+              <h2 className="font-brand text-3xl text-gray-900 mb-2">Bienvenue</h2>
+              <p className="text-gray-500 text-sm">
+                Veuillez vous identifier pour accéder à vos chantiers.
+              </p>
             </div>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-stone-700 mb-1">
-                Mot de passe
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2 border border-stone-200 rounded-lg focus:outline-none focus:border-stone-400 focus:ring-1 focus:ring-stone-400 transition"
-                placeholder="••••••••"
-                required
-              />
+            {/* Message d'erreur */}
+            {error && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-lg text-red-600 text-sm">
+                {error}
+              </div>
+            )}
+
+            {/* Formulaire */}
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Email */}
+              <div>
+                <label 
+                  htmlFor="email" 
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Adresse email
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 transition text-gray-900 placeholder-gray-400"
+                  placeholder="vous@entreprise.fr"
+                  required
+                  autoComplete="email"
+                />
+              </div>
+
+              {/* Mot de passe */}
+              <div>
+                <label 
+                  htmlFor="password" 
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Mot de passe
+                </label>
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 transition text-gray-900 placeholder-gray-400 pr-12"
+                    placeholder="••••••••"
+                    required
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 transition"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Lien mot de passe oublié */}
+              <div className="flex justify-end">
+                <a 
+                  href="/forgot-password"
+                  className="text-sm text-gray-500 hover:text-gray-900 transition"
+                >
+                  Mot de passe oublié ?
+                </a>
+              </div>
+
+              {/* Bouton de connexion */}
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-3 bg-gray-900 text-white rounded-lg hover:bg-black transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle 
+                        className="opacity-25" 
+                        cx="12" cy="12" r="10" 
+                        stroke="currentColor" 
+                        strokeWidth="4"
+                        fill="none"
+                      />
+                      <path 
+                        className="opacity-75" 
+                        fill="currentColor" 
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    Connexion...
+                  </span>
+                ) : (
+                  'Se connecter'
+                )}
+              </button>
+            </form>
+
+            {/* Footer */}
+            <div className="mt-10 pt-6 border-t border-gray-100 text-center">
+              <p className="text-sm text-gray-500">
+                Pas encore de compte ?{' '}
+                <a 
+                  href="mailto:contact@arpet.fr" 
+                  className="text-gray-900 font-medium hover:underline"
+                >
+                  Contactez votre administrateur
+                </a>
+              </p>
             </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-2.5 bg-stone-800 text-white rounded-lg hover:bg-black transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? 'Connexion...' : 'Se connecter'}
-            </button>
-          </form>
-
-          <div className="mt-6 pt-6 border-t border-stone-100 text-center">
-            <p className="text-sm text-stone-500">
-              Pas encore de compte ?{' '}
-              <a href="#" className="text-stone-800 font-medium hover:underline">
-                Contactez votre administrateur
-              </a>
-            </p>
           </div>
         </div>
-
-        {/* Footer */}
-        <p className="text-center text-xs text-stone-400 mt-6">
-          © 2025 Léa - Tous droits réservés
-        </p>
       </div>
+
+      {/* Footer copyright */}
+      <p className="absolute bottom-4 text-center text-xs text-gray-400">
+        © 2025 Arpet - Tous droits réservés
+      </p>
     </div>
   )
 }

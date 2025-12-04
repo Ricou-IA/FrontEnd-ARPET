@@ -12,7 +12,7 @@ export default {
       },
       colors: {
         // Palette "Zen" personnalisée
-        'lea': {
+        'arpet': {
           'bg': '#FAFAF9',
           'sidebar': '#F5F5F4',
           'profile': '#9B2C2C',

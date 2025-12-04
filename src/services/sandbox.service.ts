@@ -1,6 +1,6 @@
 // ============================================================
 // ARPET - Sandbox Service (Supabase)
-// Version: 1.0.2 - Fix types
+// Version: 1.1.0 - Fix RPC calls + error handling
 // Date: 2025-12-04
 // ============================================================
 
@@ -57,7 +57,6 @@ async function getCurrentProfile() {
 
 /**
  * Récupère tous les sandbox items de l'utilisateur courant
- * Filtrés automatiquement par RLS (vertical_id, org_id, user_id)
  */
 export async function getSandboxItems(
   status?: SandboxItemStatus
@@ -75,25 +74,11 @@ export async function getSandboxItems(
     const { data, error } = await query;
     
     if (error) throw error;
-    return { data, error: null };
+    return { data: data || [], error: null };
   } catch (error) {
     console.error('getSandboxItems error:', error);
     return { data: null, error: error as Error };
   }
-}
-
-/**
- * Récupère les drafts (Bac à Sable)
- */
-export async function getDrafts(): Promise<ServiceResult<SandboxItem[]>> {
-  return getSandboxItems('draft');
-}
-
-/**
- * Récupère les items épinglés (Espace de Travail)
- */
-export async function getPinnedItems(): Promise<ServiceResult<SandboxItem[]>> {
-  return getSandboxItems('pinned');
 }
 
 /**
@@ -117,34 +102,6 @@ export async function getSandboxItemById(
   }
 }
 
-/**
- * Récupère les items pour un projet spécifique
- */
-export async function getSandboxItemsByProject(
-  projectId: string,
-  status?: SandboxItemStatus
-): Promise<ServiceResult<SandboxItem[]>> {
-  try {
-    let query = supabase
-      .from('sandbox_items')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('updated_at', { ascending: false });
-    
-    if (status) {
-      query = query.eq('status', status);
-    }
-    
-    const { data, error } = await query;
-    
-    if (error) throw error;
-    return { data, error: null };
-  } catch (error) {
-    console.error('getSandboxItemsByProject error:', error);
-    return { data: null, error: error as Error };
-  }
-}
-
 // ============================================================
 // CRÉATION
 // ============================================================
@@ -156,10 +113,8 @@ export async function createSandboxItem(
   input: SandboxItemCreate
 ): Promise<ServiceResult<SandboxItem>> {
   try {
-    // Récupère le profil de l'utilisateur courant
     const profile = await getCurrentProfile();
     
-    // Prépare le content avec les valeurs par défaut
     const content: SandboxContent = {
       ...createEmptySandboxContent(input.title, input.title),
       ...input.content,
@@ -177,7 +132,7 @@ export async function createSandboxItem(
       source_qa_id: input.source_qa_id || null,
     };
     
-    console.log('Creating sandbox item:', insertData);
+    console.log('📝 Creating sandbox item:', insertData.title);
     
     const { data, error } = await supabase
       .from('sandbox_items')
@@ -186,11 +141,11 @@ export async function createSandboxItem(
       .single();
     
     if (error) {
-      console.error('Insert error:', error);
+      console.error('❌ Insert error:', error);
       throw error;
     }
     
-    console.log('Sandbox item created:', data);
+    console.log('✅ Sandbox item created:', data.id);
     return { data, error: null };
   } catch (error) {
     console.error('createSandboxItem error:', error);
@@ -233,7 +188,7 @@ export async function updateSandboxItem(
  */
 export async function updateSandboxContent(
   id: string,
-  content: Partial<SandboxContent>
+  contentUpdate: Partial<SandboxContent>
 ): Promise<ServiceResult<SandboxItem>> {
   try {
     // Récupère d'abord le content actuel
@@ -248,12 +203,15 @@ export async function updateSandboxContent(
     // Merge le content
     const mergedContent = {
       ...current.content,
-      ...content,
+      ...contentUpdate,
     };
     
     const { data, error } = await supabase
       .from('sandbox_items')
-      .update({ content: mergedContent })
+      .update({ 
+        content: mergedContent,
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', id)
       .select()
       .single();
@@ -268,20 +226,42 @@ export async function updateSandboxContent(
 
 // ============================================================
 // ACTIONS WORKFLOW (via RPC)
+// FIX: Meilleure gestion des retours RPC
 // ============================================================
 
 /**
  * Épingle un item (draft → pinned)
- * Passe du Bac à Sable vers l'Espace de Travail
  */
 export async function pinSandboxItem(
   id: string
 ): Promise<ServiceResult<SandboxItem>> {
   try {
+    console.log('📌 Pinning sandbox item:', id);
+    
     const { data, error } = await supabase
       .rpc('pin_sandbox_item', { item_id: id });
     
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Pin RPC error:', error);
+      throw error;
+    }
+    
+    // La RPC retourne l'item modifié directement
+    // Si data est null, on refetch l'item
+    if (!data) {
+      console.log('⚠️ RPC returned null, refetching item...');
+      const { data: refetched, error: refetchError } = await supabase
+        .from('sandbox_items')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (refetchError) throw refetchError;
+      console.log('✅ Item pinned (refetched):', refetched.status);
+      return { data: refetched, error: null };
+    }
+    
+    console.log('✅ Item pinned:', data);
     return { data, error: null };
   } catch (error) {
     console.error('pinSandboxItem error:', error);
@@ -291,16 +271,33 @@ export async function pinSandboxItem(
 
 /**
  * Dé-épingle un item (pinned → draft)
- * Repasse en mode édition
  */
 export async function unpinSandboxItem(
   id: string
 ): Promise<ServiceResult<SandboxItem>> {
   try {
+    console.log('📍 Unpinning sandbox item:', id);
+    
     const { data, error } = await supabase
       .rpc('unpin_sandbox_item', { item_id: id });
     
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Unpin RPC error:', error);
+      throw error;
+    }
+    
+    if (!data) {
+      const { data: refetched, error: refetchError } = await supabase
+        .from('sandbox_items')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (refetchError) throw refetchError;
+      return { data: refetched, error: null };
+    }
+    
+    console.log('✅ Item unpinned:', data);
     return { data, error: null };
   } catch (error) {
     console.error('unpinSandboxItem error:', error);
@@ -315,10 +312,28 @@ export async function archiveSandboxItem(
   id: string
 ): Promise<ServiceResult<SandboxItem>> {
   try {
+    console.log('🗃️ Archiving sandbox item:', id);
+    
     const { data, error } = await supabase
       .rpc('archive_sandbox_item', { item_id: id });
     
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Archive RPC error:', error);
+      throw error;
+    }
+    
+    if (!data) {
+      const { data: refetched, error: refetchError } = await supabase
+        .from('sandbox_items')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (refetchError) throw refetchError;
+      return { data: refetched, error: null };
+    }
+    
+    console.log('✅ Item archived:', data);
     return { data, error: null };
   } catch (error) {
     console.error('archiveSandboxItem error:', error);
@@ -337,12 +352,19 @@ export async function deleteSandboxItem(
   id: string
 ): Promise<ServiceResult<boolean>> {
   try {
+    console.log('🗑️ Deleting sandbox item:', id);
+    
     const { error } = await supabase
       .from('sandbox_items')
       .delete()
       .eq('id', id);
     
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Delete error:', error);
+      throw error;
+    }
+    
+    console.log('✅ Item deleted');
     return { data: true, error: null };
   } catch (error) {
     console.error('deleteSandboxItem error:', error);
@@ -363,7 +385,6 @@ export async function addMessageToSandbox(
   text: string
 ): Promise<ServiceResult<SandboxItem>> {
   try {
-    // Récupère le content actuel
     const { data: current, error: fetchError } = await supabase
       .from('sandbox_items')
       .select('content')
@@ -372,7 +393,6 @@ export async function addMessageToSandbox(
     
     if (fetchError) throw fetchError;
     
-    // Ajoute le message
     const messages = current.content.messages || [];
     const newMessage = {
       role,
@@ -387,6 +407,7 @@ export async function addMessageToSandbox(
           ...current.content,
           messages: [...messages, newMessage],
         },
+        updated_at: new Date().toISOString(),
       })
       .eq('id', id)
       .select()
@@ -396,47 +417,6 @@ export async function addMessageToSandbox(
     return { data, error: null };
   } catch (error) {
     console.error('addMessageToSandbox error:', error);
-    return { data: null, error: error as Error };
-  }
-}
-
-/**
- * Met à jour le résultat affiché (après un run de l'agent)
- */
-export async function updateSandboxResult(
-  id: string,
-  resultType: 'table' | 'chart' | 'number' | 'text',
-  resultData: unknown
-): Promise<ServiceResult<SandboxItem>> {
-  try {
-    const { data: current, error: fetchError } = await supabase
-      .from('sandbox_items')
-      .select('content')
-      .eq('id', id)
-      .single();
-    
-    if (fetchError) throw fetchError;
-    
-    const { data, error } = await supabase
-      .from('sandbox_items')
-      .update({
-        content: {
-          ...current.content,
-          display: {
-            result_type: resultType,
-            result_data: resultData,
-            last_run_at: new Date().toISOString(),
-          },
-        },
-      })
-      .eq('id', id)
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return { data, error: null };
-  } catch (error) {
-    console.error('updateSandboxResult error:', error);
     return { data: null, error: error as Error };
   }
 }

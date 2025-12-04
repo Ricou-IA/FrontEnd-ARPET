@@ -1,4 +1,8 @@
-// Types pour l'application ARPET (ex-Léa)
+// ============================================================
+// ARPET - Types unifiés
+// Version: 1.1.0 - Fusion index.ts + sandbox.types.ts
+// Date: 2025-12-04
+// ============================================================
 
 // ============================================
 // UTILISATEUR & AUTH
@@ -79,20 +83,10 @@ export interface Message {
 }
 
 // ============================================
-// BAC À SABLE (SANDBOX) - Supabase
+// BAC À SABLE (SANDBOX) - Types de base
 // ============================================
-export type SandboxItemType =
-  | 'conversation'
-  | 'analysis'
-  | 'note'
-  | 'comparison'
-  | 'extract';
-
-// IMPORTANT: 'validated' devient 'pinned' pour correspondre au schéma Supabase
 export type SandboxItemStatus = 'draft' | 'pinned' | 'archived';
-
 export type SandboxVisibility = 'private' | 'project' | 'org';
-
 export type ResultType = 'table' | 'chart' | 'number' | 'text';
 
 /** Message dans la conversation sandbox */
@@ -135,42 +129,25 @@ export interface SandboxRoutine {
 
 /** Structure complète du content JSONB */
 export interface SandboxContent {
-  // Contexte initial
   objective: string;
   initial_prompt: string;
-  
-  // Conversation sandbox (avec mémoire)
   messages: SandboxMessage[];
-  
-  // Résultat actuel
   display: SandboxDisplay;
-  
-  // Routine agent (peut être null si pas encore définie)
   routine: SandboxRoutine | null;
 }
 
 /** Sandbox Item complet (depuis Supabase) */
 export interface SandboxItem {
   id: string;
-  
-  // Contexte (cloisonnement)
   vertical_id: string;
   org_id: string;
   user_id: string;
   project_id: string | null;
-  
-  // Contenu
   title: string;
   content: SandboxContent;
-  
-  // Workflow
   status: SandboxItemStatus;
   visibility: SandboxVisibility;
-  
-  // Traçabilité
   source_qa_id: string | null;
-  
-  // Timestamps
   created_at: string;
   updated_at: string;
 }
@@ -188,6 +165,31 @@ export interface SandboxItemUpdate {
   title?: string;
   content?: Partial<SandboxContent>;
   project_id?: string | null;
+}
+
+// ============================================
+// TYPES UI POUR LE SANDBOX
+// ============================================
+
+/** Item affiché dans le Bac à Sable (drafts) */
+export interface SandboxDraftCard {
+  id: string;
+  title: string;
+  objective: string;
+  lastMessage: string | null;
+  messagesCount: number;
+  hasResult: boolean;
+  updatedAt: Date;
+}
+
+/** Widget affiché dans l'Espace de Travail (pinned) */
+export interface WorkspaceWidget {
+  id: string;
+  title: string;
+  resultType: ResultType | null;
+  resultData: unknown;
+  lastRunAt: Date | null;
+  canRefresh: boolean;
 }
 
 // ============================================
@@ -232,3 +234,34 @@ export function createEmptySandboxContent(
     routine: null,
   };
 }
+
+/** Transforme un SandboxItem en SandboxDraftCard pour l'UI */
+export function toSandboxDraftCard(item: SandboxItem): SandboxDraftCard {
+  const messages = item.content.messages || [];
+  const lastUserMessage = [...messages].reverse().find(m => m.role === 'user');
+  
+  return {
+    id: item.id,
+    title: item.title,
+    objective: item.content.objective || '',
+    lastMessage: lastUserMessage?.text || null,
+    messagesCount: messages.length,
+    hasResult: item.content.display?.result_data != null,
+    updatedAt: new Date(item.updated_at),
+  };
+}
+
+/** Transforme un SandboxItem en WorkspaceWidget pour l'UI */
+export function toWorkspaceWidget(item: SandboxItem): WorkspaceWidget {
+  return {
+    id: item.id,
+    title: item.title,
+    resultType: item.content.display?.result_type || null,
+    resultData: item.content.display?.result_data || null,
+    lastRunAt: item.content.display?.last_run_at 
+      ? new Date(item.content.display.last_run_at) 
+      : null,
+    canRefresh: item.content.routine != null,
+  };
+}
+

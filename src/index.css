@@ -2,57 +2,133 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   ARPET - Global Styles
+   Version: 2.0.0
+   ============================================================ */
+
 /* Base styles */
 body {
   font-family: 'Inter', sans-serif;
   background-color: #FAFAF9;
 }
 
-/* Custom scrollbar */
+/* ============================================================
+   TYPOGRAPHY - Font Classes
+   ============================================================ */
+
+/* Font Branding (Bodoni Moda) - pour le logo et les titres principaux */
+.font-brand {
+  font-family: 'Bodoni Moda', serif;
+}
+
+/* Font Serif (Instrument Serif) - pour les titres secondaires */
+.font-serif {
+  font-family: 'Instrument Serif', serif;
+}
+
+/* ============================================================
+   LOGIN PAGE - Styles spécifiques
+   ============================================================ */
+
+/* Background pattern pour la page de login */
+.login-bg-pattern {
+  background-color: #F3F4F6;
+  background-image: radial-gradient(#E5E7EB 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Animation physique du fil à plomb */
+.plumb-bob-wrapper {
+  transform-origin: top center;
+  animation: physicsSway 4s ease-in-out infinite;
+}
+
+@keyframes physicsSway {
+  0% {
+    transform: rotate(1.5deg);
+  }
+  50% {
+    transform: rotate(-1.5deg);
+  }
+  100% {
+    transform: rotate(1.5deg);
+  }
+}
+
+/* ============================================================
+   SCROLLBAR - Custom styling
+   ============================================================ */
+
 ::-webkit-scrollbar {
   width: 5px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
   background: #E5E5E5;
   border-radius: 10px;
 }
 
-/* Widget card hover effect */
+::-webkit-scrollbar-thumb:hover {
+  background: #D4D4D4;
+}
+
+/* ============================================================
+   WIDGET CARDS - Hover effects
+   ============================================================ */
+
 .widget-card {
   transition: all 0.2s ease;
 }
+
 .widget-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 
+              0 4px 6px -2px rgba(0, 0, 0, 0.025);
 }
 
-/* Chat container focus effect */
+/* ============================================================
+   CHAT INPUT - Focus effects
+   ============================================================ */
+
 .chat-container {
   transition: border-color 0.2s, box-shadow 0.2s;
 }
+
 .chat-container:focus-within {
   border-color: #A8A29E;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
 }
 
-/* Sidebar collapsed states */
+/* ============================================================
+   SIDEBAR - Collapsed states
+   ============================================================ */
+
 .sidebar-collapsed .sidebar-text {
   display: none;
 }
+
 .sidebar-collapsed .sidebar-item {
   justify-content: center;
   padding-left: 0;
   padding-right: 0;
 }
+
 .sidebar-collapsed .sidebar-header {
   justify-content: center;
 }
+
 .sidebar-collapsed .section-title {
   display: none;
 }
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
 
 /* Animation for push to sandbox */
 @keyframes slideDownFade {
@@ -65,13 +141,49 @@ body {
     transform: translateY(0);
   }
 }
+
 .animate-enter {
   animation: slideDownFade 0.4s ease-out forwards;
 }
 
-/* Utility classes */
+/* Fade in animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* ============================================================
+   UTILITY CLASSES
+   ============================================================ */
+
 @layer utilities {
-  .font-serif {
-    font-family: 'Instrument Serif', serif;
+  /* Truncate multi-line text */
+  .line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 }

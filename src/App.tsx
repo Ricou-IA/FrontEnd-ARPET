@@ -35,7 +35,7 @@ function App() {
     return (
       <div className="h-screen bg-[#FAFAF9] flex items-center justify-center">
         <div className="text-center">
-          <h1 className="font-serif text-4xl text-stone-800 mb-4">Léa.</h1>
+          <h1 className="font-serif text-4xl text-stone-800 mb-4">Arpet.</h1>
           <div className="flex gap-1 justify-center">
             <span className="w-2 h-2 bg-stone-300 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
             <span className="w-2 h-2 bg-stone-300 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />

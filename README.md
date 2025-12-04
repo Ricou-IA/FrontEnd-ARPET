@@ -1,4 +1,4 @@
-# Léa - Frontend React
+# Arpet - Frontend React
 
 Assistant intelligent pour conducteurs de travaux BTP.
 

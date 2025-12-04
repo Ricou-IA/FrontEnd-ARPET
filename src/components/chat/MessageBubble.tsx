@@ -35,9 +35,9 @@ export function MessageBubble({ message, onAnchor, onVoteUp, onVoteDown }: Messa
 
   return (
     <div className="flex gap-4 group">
-      {/* Avatar Léa */}
+      {/* Avatar Arpet */}
       <div className="w-8 h-8 rounded-full bg-stone-800 flex items-center justify-center text-white font-serif italic text-sm flex-shrink-0 mt-1">
-        L
+        A
       </div>
 
       <div className="flex-1 max-w-2xl">
