@@ -4,6 +4,7 @@ import { MessageBubble } from './MessageBubble'
 import { ChatInput } from './ChatInput'
 import { createSandboxItem } from '@/services/sandbox.service'
 import { createEmptySandboxContent } from '@/types'
+import { supabase } from '../../lib/supabase'
 import type { Message } from '../../types'
 
 // Anecdotes BTP pour la zone "Ambiance"
@@ -57,28 +58,88 @@ export function ChatArea() {
     }
     addMessage(userMessage)
 
-    // Simuler la réponse de l'agent (mock pour l'instant)
+    // Afficher l'indicateur de frappe
     setIsAgentTyping(true)
 
-    // Simuler un délai de réponse
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    try {
+      // Appeler la Edge Function 'baikal-brain'
+      const { data, error } = await supabase.functions.invoke('baikal-brain', {
+        body: {
+          query: content,
+          filters: {
+            org_id: 'test_org',
+            project_id: 'test_project',
+            user_id: 'test_user'
+          }
+        }
+      })
 
-    // Réponse mockée
-    const mockResponse: Message = {
-      id: crypto.randomUUID(),
-      role: 'assistant',
-      content: generateMockResponse(content),
-      timestamp: new Date(),
-      knowledge_type: Math.random() > 0.5 ? 'shared' : 'new',
-      validation_count: Math.floor(Math.random() * 50),
-      agent_source: 'librarian',
-      sources: [
-        { document_id: '1', document_name: 'CCTP Lot 04', score: 0.92 },
-        { document_id: '2', document_name: 'DTU 45.1', score: 0.87 },
-      ]
+      if (error) {
+        console.error('Erreur lors de l\'appel à la Edge Function:', error)
+        // Afficher un message d'erreur à l'utilisateur
+        const errorMessage: Message = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: 'Désolé, une erreur est survenue lors du traitement de votre demande. Veuillez réessayer.',
+          timestamp: new Date(),
+        }
+        addMessage(errorMessage)
+        setIsAgentTyping(false)
+        return
+      }
+
+      // Afficher la réponse dans la console pour debug
+      console.log('Réponse de la Edge Function:', data)
+
+      // Traiter la réponse (peut contenir "destination" ou "response")
+      let responseContent = ''
+      if (data) {
+        if (data.response) {
+          // Réponse directe de l'agent
+          responseContent = typeof data.response === 'string' 
+            ? data.response 
+            : JSON.stringify(data.response)
+        } else if (data.destination) {
+          // Routeur - destination indiquée avec reasoning
+          const destinationName = data.destination === 'BIBLIOTHECAIRE' 
+            ? 'Bibliothécaire' 
+            : data.destination === 'ANALYSTE' 
+              ? 'Analyste' 
+              : data.destination
+          
+          responseContent = `🔀 **Routeur** : Redirection vers l'agent **${destinationName}**\n\n${data.reasoning || data.message || 'Analyse de la requête en cours...'}`
+        } else {
+          // Format inconnu, afficher tout le contenu
+          responseContent = JSON.stringify(data, null, 2)
+        }
+      }
+
+      // Ajouter la réponse de l'assistant
+      const assistantMessage: Message = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: responseContent || 'Aucune réponse reçue.',
+        timestamp: new Date(),
+        // Metadata optionnelle si disponible dans la réponse
+        knowledge_type: data?.knowledge_type,
+        validation_count: data?.validation_count,
+        agent_source: data?.agent_source,
+        sources: data?.sources,
+      }
+      addMessage(assistantMessage)
+    } catch (err) {
+      console.error('Erreur lors de l\'envoi du message:', err)
+      // Afficher un message d'erreur à l'utilisateur
+      const errorMessage: Message = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: 'Une erreur inattendue est survenue. Veuillez réessayer.',
+        timestamp: new Date(),
+      }
+      addMessage(errorMessage)
+    } finally {
+      setIsAgentTyping(false)
     }
-    addMessage(mockResponse)
-    setIsAgentTyping(false)
   }
 
   // Ancrer un message dans le bac à sable (persisté dans Supabase)
@@ -188,33 +249,7 @@ export function ChatArea() {
   )
 }
 
-// Helpers pour les mocks
-function generateMockResponse(query: string): string {
-  const lowerQuery = query.toLowerCase()
-
-  if (lowerQuery.includes('cctp') || lowerQuery.includes('isolation')) {
-    return `J'ai analysé le CCTP. Il y a effectivement un écart. Voici les points clés :
-- CCTP : 120mm isolant
-- DTU : 140mm requis
-
-Cette différence de 20mm peut avoir des implications sur la performance thermique du bâtiment. Je vous recommande de signaler cette non-conformité au maître d'ouvrage.`
-  }
-
-  if (lowerQuery.includes('planning') || lowerQuery.includes('retard')) {
-    return `D'après l'analyse du planning, le lot gros œuvre présente un retard de 3 jours. Les causes identifiées sont :
-- Intempéries semaine 48
-- Livraison béton décalée
-
-Impact : Le second œuvre pourra débuter le 15/12 au lieu du 12/12. Je peux générer un planning de rattrapage si vous le souhaitez.`
-  }
-
-  return `J'ai bien reçu votre question concernant "${query.substring(0, 50)}...".
-
-Laissez-moi analyser les documents du chantier pour vous fournir une réponse précise. En attendant, voici ce que je peux vous dire de manière générale :
-
-Cette demande nécessite une vérification dans le CCTP et les DTU applicables. Souhaitez-vous que j'approfondisse un point particulier ?`
-}
-
+// Helper pour générer un titre à partir du contenu
 function generateTitleFromContent(content: string): string {
   // Extraire les premiers mots significatifs
   const words = content.split(' ').slice(0, 5).join(' ')

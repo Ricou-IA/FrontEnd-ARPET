@@ -1,18 +1,21 @@
 // ============================================================
 // ARPET - SandboxGrid Component
-// Version: 3.0.0 - Direct Zustand store usage
+// Version: 4.0.0 - UX Refonte (3 colonnes + GhostCard premier)
 // Date: 2025-12-04
 // ============================================================
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAppStore } from '@/stores/appStore'
 import { SandboxCard, GhostCard } from './SandboxCard'
 import { SandboxEditor } from './SandboxEditor'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { createEmptySandboxContent } from '@/types'
 import type { SandboxItem } from '@/types'
 
 export function SandboxGrid() {
-  // Store direct - pas de hook intermédiaire
+  // ========================================
+  // STORE
+  // ========================================
   const sandboxItems = useAppStore((s) => s.sandboxItems)
   const sandboxLoading = useAppStore((s) => s.sandboxLoading)
   const sandboxError = useAppStore((s) => s.sandboxError)
@@ -24,187 +27,60 @@ export function SandboxGrid() {
   const pinSandboxItem = useAppStore((s) => s.pinSandboxItem)
   const clearSandboxError = useAppStore((s) => s.clearSandboxError)
 
+  // ========================================
+  // LOCAL STATE
+  // ========================================
   const [selectedItem, setSelectedItem] = useState<SandboxItem | null>(null)
   const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null)
+  const [itemToDelete, setItemToDelete] = useState<SandboxItem | null>(null)
 
-  // Refs pour éviter les appels multiples lors des re-renders (ALT+TAB, focus/blur, etc.)
   const hasFetchedRef = useRef(false)
-  const isMountedRef = useRef(true)
-  const abortControllerRef = useRef<AbortController | null>(null)
-  const isCreatingRef = useRef(false) // Protection locale supplémentaire
-  const isAltTabActiveRef = useRef(false) // Flag pour ignorer les mises à jour lors d'ALT+TAB
 
-  // Notification - mémorisée pour éviter les re-créations (déclarée avant les refs)
-  const showNotification = useCallback((type: 'success' | 'error', message: string) => {
-    if (!isMountedRef.current) return
-    setNotification({ type, message })
-    setTimeout(() => {
-      if (isMountedRef.current) {
-        setNotification(null)
-      }
-    }, 3000)
-  }, [])
-
-  // Refs pour stocker les fonctions et éviter les recréations (après showNotification)
-  const createSandboxItemRef = useRef(createSandboxItem)
-  const showNotificationRef = useRef(showNotification)
-
-  // Mettre à jour les refs quand les fonctions changent
+  // ========================================
+  // FETCH AU MOUNT
+  // ========================================
   useEffect(() => {
-    createSandboxItemRef.current = createSandboxItem
-    showNotificationRef.current = showNotification
-  }, [createSandboxItem, showNotification])
-
-  // Charger les items au montage UNE SEULE FOIS
-  useEffect(() => {
-    // Ne fetch que si on n'a pas déjà fetché et que le composant est monté
-    if (!hasFetchedRef.current && isMountedRef.current) {
+    if (!hasFetchedRef.current) {
       hasFetchedRef.current = true
       fetchSandboxItems()
     }
+  }, [fetchSandboxItems])
 
-    // Protection contre les événements focus/blur qui pourraient déclencher des re-renders
-    // ⚠️ SIMPLIFIÉ : On ignore juste les résultats si ALT+TAB est actif, mais on ne bloque pas la création
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        isAltTabActiveRef.current = true
-        console.log('👁️ Page hidden (ALT+TAB)')
-      } else {
-        // Désactiver IMMÉDIATEMENT pour permettre les nouvelles créations
-        isAltTabActiveRef.current = false
-        console.log('👁️ Page visible again, flag reset immediately')
-      }
-    }
-
-    const handleFocus = () => {
-      // Désactiver IMMÉDIATEMENT
-      isAltTabActiveRef.current = false
-      console.log('👁️ Window focused, flag reset immediately')
-    }
-
-    const handleBlur = () => {
-      isAltTabActiveRef.current = true
-      console.log('👁️ Window blurred (ALT+TAB)')
-    }
-
-    window.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('focus', handleFocus)
-    window.addEventListener('blur', handleBlur)
-
-    // Cleanup au démontage
-    return () => {
-      isMountedRef.current = false
-      // Annuler toute requête en cours
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-      }
-      window.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('focus', handleFocus)
-      window.removeEventListener('blur', handleBlur)
-    }
-  }, []) // Dépendances vides pour éviter les réexécutions lors d'ALT+TAB
-
-  // ⚠️ Réinitialiser les refs locales quand le store se réinitialise
-  // Cela permet de débloquer la création après un timeout
-  useEffect(() => {
-    if (!sandboxCreating) {
-      // Si sandboxCreating passe à false, réinitialiser IMMÉDIATEMENT les refs locales
-      isCreatingRef.current = false
-      console.log('🔄 sandboxCreating = false, resetting isCreatingRef')
-    }
-  }, [sandboxCreating])
+  // ========================================
+  // HELPERS
+  // ========================================
+  const showNotification = (type: 'success' | 'error', message: string) => {
+    setNotification({ type, message })
+    setTimeout(() => setNotification(null), 3000)
+  }
 
   // Filtrer les brouillons
   const draftItems = sandboxItems.filter(item => item.status === 'draft')
 
-  // Créer un brouillon - STABLE, jamais recréé, complètement isolé
-  const handleNewDraft = useCallback(async () => {
-    // Utiliser getState() pour avoir la valeur la plus récente
-    const currentState = useAppStore.getState()
-    console.log('🖱️ handleNewDraft called', { 
-      sandboxCreating: currentState.sandboxCreating,
-      isCreatingRef: isCreatingRef.current
+  // ========================================
+  // HANDLERS
+  // ========================================
+  
+  const handleNewDraft = async () => {
+    if (sandboxCreating) return
+
+    const newItem = await createSandboxItem({
+      title: 'Nouveau brouillon',
+      content: createEmptySandboxContent('Nouveau brouillon'),
     })
     
-    // Protection SIMPLE : utiliser uniquement le state du store
-    // Le store gère déjà les protections (timeout, ID unique, etc.)
-    if (currentState.sandboxCreating) {
-      console.log('⚠️ Creation already in progress (store), ignoring')
-      return
-    }
-
-    // Protection locale pour éviter les doubles clics très rapides (< 500ms)
-    // Mais on la réinitialise aussi si le store se réinitialise
-    if (isCreatingRef.current) {
-      console.log('⚠️ Local creation lock active, checking store...')
-      // Vérifier à nouveau le store - si le timeout a réinitialisé, on peut continuer
-      const recheckState = useAppStore.getState()
-      if (recheckState.sandboxCreating) {
-        console.log('⚠️ Store still creating, ignoring')
-        return
-      }
-      // Si le store n'est plus en création, réinitialiser le ref et continuer
-      console.log('✅ Store reset, clearing local lock and continuing')
-      isCreatingRef.current = false
-    }
-
-    // Activer le lock local (sera réinitialisé par le useEffect si le store se réinitialise)
-    isCreatingRef.current = true
-
-    try {
-      console.log('✅ Starting creation...')
-      
-      // Utiliser la ref pour avoir la fonction la plus récente sans dépendances
-      const newItem = await createSandboxItemRef.current({
-        title: 'Nouveau brouillon',
-        content: createEmptySandboxContent('Nouveau brouillon'),
-      })
-      
-      console.log('📦 Creation result:', { newItem })
-      
-      // Vérifier que le composant est toujours monté
-      if (!isMountedRef.current) {
-        console.log('⚠️ Component unmounted during creation, ignoring result')
-        return
-      }
-      
-      if (newItem) {
-        console.log('✅ Item created successfully:', newItem.id)
-        showNotificationRef.current('success', 'Brouillon créé')
-        // Réinitialiser le lock local immédiatement en cas de succès
-        isCreatingRef.current = false
-      } else {
-        console.log('⚠️ No item returned')
-        // Attendre un peu pour que le state se mette à jour
-        setTimeout(() => {
-          if (isMountedRef.current) {
-            const currentCreating = useAppStore.getState().sandboxCreating
-            console.log('🔍 State check after timeout:', { currentCreating })
-            if (!currentCreating) {
-              showNotificationRef.current('error', 'Erreur lors de la création')
-            }
-            // Le lock local sera réinitialisé par le useEffect quand sandboxCreating passe à false
-          }
-        }, 200)
-      }
-    } catch (err) {
-      console.error('❌ Creation error:', err)
-      if (isMountedRef.current) {
-        // Attendre un peu pour que le state se mette à jour
-        setTimeout(() => {
-          const currentCreating = useAppStore.getState().sandboxCreating
-          if (!currentCreating) {
-            showNotificationRef.current('error', 'Erreur lors de la création')
-          }
-          // Le lock local sera réinitialisé par le useEffect quand sandboxCreating passe à false
-        }, 200)
+    if (newItem) {
+      showNotification('success', 'Brouillon créé')
+      // Ouvrir directement l'éditeur
+      setSelectedItem(newItem)
+    } else {
+      const currentError = useAppStore.getState().sandboxError
+      if (currentError) {
+        showNotification('error', 'Erreur lors de la création')
       }
     }
-    // ⚠️ SUPPRIMÉ : Le finally block qui réinitialisait après 1 seconde
-    // Maintenant c'est géré par le useEffect qui écoute sandboxCreating
-  }, []) // Dépendances vides - la fonction ne sera JAMAIS recréée
+  }
 
-  // Épingler
   const handleValidate = async (item: SandboxItem) => {
     const result = await pinSandboxItem(item.id)
     
@@ -215,29 +91,45 @@ export function SandboxGrid() {
     }
   }
 
-  // Supprimer
   const handleDelete = async (item: SandboxItem) => {
-    if (!window.confirm(`Supprimer "${item.title}" ?`)) return
+    setItemToDelete(item)
+  }
+
+  const confirmDelete = async () => {
+    if (!itemToDelete) return
     
-    const success = await deleteSandboxItem(item.id)
+    const success = await deleteSandboxItem(itemToDelete.id)
     
     if (success) {
       showNotification('success', 'Brouillon supprimé')
     } else {
       showNotification('error', 'Erreur lors de la suppression')
     }
+    
+    setItemToDelete(null)
   }
 
-  // Ouvrir éditeur
   const handleCardClick = (item: SandboxItem) => {
     setSelectedItem(item)
   }
 
-  // Chargement
+  // Callback quand l'éditeur met à jour un item
+  const handleItemUpdate = (updatedItem: SandboxItem) => {
+    setSelectedItem(updatedItem)
+  }
+
+  // Callback quand l'éditeur supprime un item
+  const handleItemDelete = () => {
+    setSelectedItem(null)
+  }
+
+  // ========================================
+  // RENDER - Loading
+  // ========================================
   if (sandboxLoading && sandboxItems.length === 0) {
     return (
       <section className="px-[10%] xl:px-[15%] py-8 pb-24">
-        <div className="flex items-center gap-3 mb-6 max-w-4xl">
+        <div className="flex items-center gap-3 mb-6">
           <h3 className="font-serif text-2xl text-stone-800 italic">Bac à sable</h3>
         </div>
         <div className="flex items-center justify-center h-32 text-stone-400">
@@ -251,11 +143,14 @@ export function SandboxGrid() {
     )
   }
 
+  // ========================================
+  // RENDER - Main
+  // ========================================
   return (
     <>
       <section className="px-[10%] xl:px-[15%] py-8 pb-24">
         {/* Header */}
-        <div className="flex items-center gap-3 mb-6 max-w-4xl">
+        <div className="flex items-center gap-3 mb-6">
           <h3 className="font-serif text-2xl text-stone-800 italic">Bac à sable</h3>
           <span className="text-[10px] font-bold bg-stone-200 text-stone-600 px-2 py-0.5 rounded-full uppercase">
             Brouillons
@@ -267,7 +162,7 @@ export function SandboxGrid() {
           )}
         </div>
 
-        {/* Toast */}
+        {/* Toast Notification */}
         {notification && (
           <div className={`
             fixed bottom-6 right-6 z-50 px-4 py-3 rounded-lg shadow-lg animate-slide-down-fade
@@ -281,14 +176,21 @@ export function SandboxGrid() {
 
         {/* Erreur */}
         {sandboxError && (
-          <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg max-w-4xl mb-4 flex justify-between items-center">
+          <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4 flex justify-between items-center">
             <span>Erreur: {sandboxError.message}</span>
             <button onClick={clearSandboxError} className="text-red-400 hover:text-red-600 ml-4">✕</button>
           </div>
         )}
 
-        {/* Grille */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 max-w-4xl">
+        {/* Grille 3 colonnes */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* GhostCard EN PREMIER */}
+          <GhostCard 
+            onClick={handleNewDraft} 
+            disabled={sandboxCreating}
+          />
+
+          {/* Cartes Draft */}
           {draftItems.map((item) => (
             <SandboxCard
               key={item.id}
@@ -298,16 +200,11 @@ export function SandboxGrid() {
               onClick={handleCardClick}
             />
           ))}
-
-          <GhostCard 
-            onClick={handleNewDraft} 
-            disabled={sandboxCreating}
-          />
         </div>
 
         {/* Message si vide */}
-        {draftItems.length === 0 && (
-          <p className="text-sm text-stone-400 mt-4 max-w-4xl">
+        {draftItems.length === 0 && !sandboxCreating && (
+          <p className="text-sm text-stone-400 mt-4">
             Cliquez sur "+" pour créer un nouveau brouillon.
           </p>
         )}
@@ -318,9 +215,22 @@ export function SandboxGrid() {
         <SandboxEditor
           item={selectedItem}
           onClose={() => setSelectedItem(null)}
-          onUpdate={(updatedItem: SandboxItem) => setSelectedItem(updatedItem)}
+          onUpdate={handleItemUpdate}
+          onDelete={handleItemDelete}
         />
       )}
+
+      {/* Dialog de confirmation suppression */}
+      <ConfirmDialog
+        isOpen={itemToDelete !== null}
+        title="Supprimer ce brouillon ?"
+        message={`"${itemToDelete?.title}" sera définitivement supprimé.`}
+        confirmLabel="Supprimer"
+        cancelLabel="Annuler"
+        variant="danger"
+        onConfirm={confirmDelete}
+        onCancel={() => setItemToDelete(null)}
+      />
     </>
   )
 }

@@ -4,9 +4,11 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --force",
+    "dev:clean": "vite --force --clearScreen false",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "clean": "vite --force"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",

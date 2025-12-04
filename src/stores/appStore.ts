@@ -1,6 +1,6 @@
 // ============================================================
 // ARPET - App Store (Zustand)
-// Version: 2.0.0 - Sandbox actions intégrées
+// Version: 2.1.0 - FIX ALT+TAB bug
 // Date: 2025-12-04
 // ============================================================
 
@@ -35,7 +35,6 @@ interface AppState {
   sandboxLoading: boolean
   sandboxError: Error | null
   sandboxCreating: boolean
-  sandboxCreationId: string | null // ID unique pour chaque création
   
   // Actions Sandbox
   fetchSandboxItems: () => Promise<void>
@@ -45,7 +44,7 @@ interface AppState {
   unpinSandboxItem: (id: string) => Promise<SandboxItem | null>
   archiveSandboxItem: (id: string) => Promise<SandboxItem | null>
   clearSandboxError: () => void
-  resetSandboxCreating: () => void // Réinitialisation d'urgence
+  resetSandboxCreating: () => void
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -89,17 +88,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   sandboxLoading: false,
   sandboxError: null,
   sandboxCreating: false,
-  sandboxCreationId: null,
   
   // ========================================
-  // SANDBOX - Actions
+  // SANDBOX - Actions (SIMPLIFIED & ROBUST)
   // ========================================
   
   fetchSandboxItems: async () => {
-    // Éviter les appels multiples OU pendant une création
     const state = get()
-    if (state.sandboxLoading || state.sandboxCreating) {
-      console.log('⚠️ Fetch blocked: already loading or creating')
+    if (state.sandboxLoading) {
+      console.log('⚠️ Fetch already in progress, skipping')
       return
     }
     
@@ -110,15 +107,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       
       if (error) throw error
       
-      // Vérifier qu'on n'est pas en train de créer avant de mettre à jour
-      // (pour éviter d'écraser un item qui vient d'être créé)
-      if (!get().sandboxCreating) {
-        set({ sandboxItems: data || [], sandboxLoading: false })
-        console.log('✅ Sandbox items loaded:', data?.length || 0)
-      } else {
-        console.log('⚠️ Fetch completed but creation in progress, skipping update')
-        set({ sandboxLoading: false })
-      }
+      set({ sandboxItems: data || [], sandboxLoading: false })
+      console.log('✅ Sandbox items loaded:', data?.length || 0)
     } catch (err) {
       console.error('❌ Fetch error:', err)
       set({ sandboxError: err as Error, sandboxLoading: false })
@@ -126,124 +116,62 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   
   createSandboxItem: async (input) => {
-    // LOCK: Éviter les créations multiples - vérification atomique
+    // ========================================
+    // SIMPLE LOCK - Pas de creationId complexe
+    // ========================================
     const state = get()
     if (state.sandboxCreating) {
-      console.log('⚠️ Already creating, blocked')
+      console.log('⚠️ Creation already in progress, blocked')
       return null
     }
     
-    // Générer un ID unique pour cette création
-    const creationId = `create-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-    
-    // Bloquer aussi les fetches pendant la création
-    set({ 
-      sandboxCreating: true, 
-      sandboxError: null, 
-      sandboxLoading: false,
-      sandboxCreationId: creationId
-    })
-    console.log('➕ Creating sandbox item...', { creationId })
-    
-    // Timeout de sécurité (10 secondes)
-    // Si la création prend trop de temps, réinitialiser l'état
-    // ⚠️ IMPORTANT : Stocker le timeoutId dans une variable accessible pour pouvoir l'annuler
-    let timeoutId: NodeJS.Timeout | null = null
-    timeoutId = setTimeout(() => {
-      const currentState = get()
-      // Vérifier que c'est toujours la même création
-      if (currentState.sandboxCreationId === creationId && currentState.sandboxCreating) {
-        console.log('⏱️ Creation timeout (3s), resetting state')
-        set({ 
-          sandboxCreating: false, 
-          sandboxCreationId: null,
-          sandboxError: new Error('La création a pris trop de temps. Veuillez réessayer.')
-        })
-      }
-    }, 3000) // 3 secondes pour les tests
+    // Lock immédiat
+    set({ sandboxCreating: true, sandboxError: null })
+    console.log('➕ Creating sandbox item...')
     
     try {
       const { data, error } = await sandboxService.createSandboxItem(input)
       
-      // Vérifier IMMÉDIATEMENT que c'est toujours la même création (protection ALT+TAB)
-      // AVANT d'annuler le timeout
-      const currentState = get()
-      if (currentState.sandboxCreationId !== creationId) {
-        console.log('⚠️ Creation ID mismatch, ignoring result (ALT+TAB?)', {
-          expected: creationId,
-          current: currentState.sandboxCreationId
-        })
-        // Annuler le timeout et ne pas mettre à jour le state
-        if (timeoutId) {
-          clearTimeout(timeoutId)
-          timeoutId = null
-        }
-        return null
-      }
-      
-      // Annuler le timeout si la création réussit et que l'ID correspond
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-        timeoutId = null
-      }
-      
       if (error) throw error
       
       if (data) {
-        // Ajouter l'item au début de la liste
-        set((state) => {
-          // Vérifier à nouveau l'ID avant de mettre à jour
-          if (state.sandboxCreationId !== creationId) {
-            console.log('⚠️ Creation ID mismatch during update, ignoring')
-            return state
-          }
-          
-          // Vérifier qu'il n'est pas déjà présent (éviter les doublons)
-          const exists = state.sandboxItems.some(item => item.id === data.id)
-          if (exists) {
-            console.log('⚠️ Item already exists, updating instead')
-            return {
-              sandboxItems: state.sandboxItems.map(item => 
-                item.id === data.id ? data : item
-              ),
-              sandboxCreating: false,
-              sandboxCreationId: null
-            }
-          }
-          return { 
-            sandboxItems: [data, ...state.sandboxItems],
-            sandboxCreating: false,
-            sandboxCreationId: null
-          }
-        })
+        // Vérifier que l'item n'existe pas déjà (éviter doublons)
+        const currentItems = get().sandboxItems
+        const exists = currentItems.some(item => item.id === data.id)
+        
+        if (exists) {
+          console.log('⚠️ Item already exists, updating')
+          set({
+            sandboxItems: currentItems.map(item => 
+              item.id === data.id ? data : item
+            ),
+            sandboxCreating: false
+          })
+        } else {
+          set({ 
+            sandboxItems: [data, ...currentItems],
+            sandboxCreating: false
+          })
+        }
+        
         console.log('✅ Created:', data.id)
         return data
       }
       
-      // Toujours réinitialiser sandboxCreating, même si data est null
-      set((state) => {
-        // Vérifier l'ID avant de réinitialiser
-        if (state.sandboxCreationId !== creationId) {
-          return state
-        }
-        return { sandboxCreating: false, sandboxCreationId: null }
-      })
+      // Pas de data mais pas d'erreur non plus
+      console.log('⚠️ No data returned from create')
+      set({ sandboxCreating: false })
       return null
-    } catch (err) {
-      // Annuler le timeout en cas d'erreur
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-        timeoutId = null
-      }
       
+    } catch (err) {
       console.error('❌ Create error:', err)
-      // Vérifier l'ID avant de réinitialiser
-      const currentState = get()
-      if (currentState.sandboxCreationId === creationId) {
-        set({ sandboxError: err as Error, sandboxCreating: false, sandboxCreationId: null })
-      }
+      set({ sandboxError: err as Error, sandboxCreating: false })
       return null
     }
+    // ========================================
+    // ✅ GARANTIE : sandboxCreating est TOUJOURS
+    //    remis à false, peu importe le chemin
+    // ========================================
   },
   
   deleteSandboxItem: async (id) => {
@@ -344,7 +272,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   clearSandboxError: () => set({ sandboxError: null }),
   
   resetSandboxCreating: () => {
-    console.log('🔄 Resetting sandbox creating state (emergency)')
-    set({ sandboxCreating: false, sandboxCreationId: null })
+    console.log('🔄 Manual reset of sandboxCreating')
+    set({ sandboxCreating: false })
   },
 }))

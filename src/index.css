@@ -4,7 +4,7 @@
 
 /* ============================================================
    ARPET - Global Styles
-   Version: 2.0.0
+   Version: 2.1.0 - Ajout animation dialog
    ============================================================ */
 
 /* Base styles */
@@ -17,9 +17,20 @@ body {
    TYPOGRAPHY - Font Classes
    ============================================================ */
 
-/* Font Branding (Bodoni Moda) - pour le logo et les titres principaux */
+/* Font Branding (Bodoni Moda) - graisses renforcées pour meilleure lisibilité */
 .font-brand {
   font-family: 'Bodoni Moda', serif;
+  font-weight: 600; /* SemiBold par défaut */
+}
+
+.font-brand-bold {
+  font-family: 'Bodoni Moda', serif;
+  font-weight: 700; /* Bold */
+}
+
+.font-brand-heavy {
+  font-family: 'Bodoni Moda', serif;
+  font-weight: 800; /* ExtraBold */
 }
 
 /* Font Serif (Instrument Serif) - pour les titres secondaires */
@@ -142,6 +153,10 @@ body {
   }
 }
 
+.animate-slide-down-fade {
+  animation: slideDownFade 0.4s ease-out forwards;
+}
+
 .animate-enter {
   animation: slideDownFade 0.4s ease-out forwards;
 }
@@ -158,6 +173,22 @@ body {
 
 .animate-fade-in {
   animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* Scale in animation (pour les dialogs) */
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.2s ease-out forwards;
 }
 
 /* ============================================================

@@ -1,12 +1,12 @@
 // ============================================================
-// ARPET - Forgot Password Page
-// Version: 1.0.0
+// ARPET - Forgot Password Page (Refactorisé)
+// Version: 1.2.0 - Utilise AuthBranding
 // ============================================================
 
 import { useState } from 'react'
 import { ArrowLeft, Mail, CheckCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { PlumbBob } from './PlumbBob'
+import { AuthBranding } from './AuthBranding'
 
 export function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -38,50 +38,14 @@ export function ForgotPasswordPage() {
       {/* Split Card Container */}
       <div className="bg-white rounded-2xl shadow-2xl shadow-gray-200/50 w-full max-w-5xl flex flex-col md:flex-row min-h-[600px] overflow-hidden">
         
-        {/* ========================================= */}
-        {/* Partie GAUCHE : Branding                 */}
-        {/* ========================================= */}
-        <div className="w-full md:w-5/12 p-12 flex flex-col justify-center items-center relative text-center bg-gray-50 border-r border-gray-100 overflow-hidden">
-          {/* Motif subtil de fond */}
-          <div 
-            className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-[0.02]"
-            style={{
-              backgroundImage: 'radial-gradient(#1F2937 1px, transparent 1px)',
-              backgroundSize: '16px 16px'
-            }}
-          />
-          
-          {/* Logo + Fil à plomb */}
-          <div className="relative z-10 mb-8">
-            <h1 className="font-brand text-6xl text-gray-900 font-medium tracking-tight relative inline-block">
-              Arpet
-              <span className="relative inline-block">
-                .
-                <PlumbBob />
-              </span>
-            </h1>
-          </div>
+        {/* Partie GAUCHE : Branding (factorisé) */}
+        <AuthBranding />
 
-          {/* Tagline */}
-          <blockquote className="max-w-xs mx-auto z-10 relative mt-16">
-            <p className="font-brand text-2xl text-gray-800 leading-snug">
-              "Il cherche les réponses,
-              <br />
-              <span className="font-semibold text-black">vous prenez les décisions."</span>
-            </p>
-          </blockquote>
-        </div>
-
-        {/* ========================================= */}
-        {/* Partie DROITE : Formulaire               */}
-        {/* ========================================= */}
+        {/* Partie DROITE : Formulaire */}
         <div className="w-full md:w-7/12 bg-white p-12 lg:p-16 flex flex-col justify-center">
           <div className="max-w-sm mx-auto w-full">
             {/* Bouton retour */}
-            <a 
-              href="/login"
-              className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition mb-8"
-            >
+            <a href="/login" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition mb-8">
               <ArrowLeft className="w-4 h-4" />
               Retour à la connexion
             </a>
@@ -92,9 +56,7 @@ export function ForgotPasswordPage() {
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
                   <CheckCircle className="w-8 h-8 text-green-600" />
                 </div>
-                <h2 className="font-brand text-3xl text-gray-900 mb-4">
-                  Email envoyé !
-                </h2>
+                <h2 className="font-brand-bold text-3xl text-gray-900 mb-4">Email envoyé !</h2>
                 <p className="text-gray-500 text-sm mb-6">
                   Si un compte existe avec l'adresse <strong className="text-gray-900">{email}</strong>, 
                   vous recevrez un email avec les instructions pour réinitialiser votre mot de passe.
@@ -111,9 +73,7 @@ export function ForgotPasswordPage() {
                   <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-4">
                     <Mail className="w-6 h-6 text-gray-600" />
                   </div>
-                  <h2 className="font-brand text-3xl text-gray-900 mb-2">
-                    Mot de passe oublié ?
-                  </h2>
+                  <h2 className="font-brand-bold text-3xl text-gray-900 mb-2">Mot de passe oublié ?</h2>
                   <p className="text-gray-500 text-sm">
                     Entrez votre adresse email et nous vous enverrons un lien pour réinitialiser votre mot de passe.
                   </p>
@@ -129,10 +89,7 @@ export function ForgotPasswordPage() {
                 <form onSubmit={handleSubmit} className="space-y-6">
                   {/* Email */}
                   <div>
-                    <label 
-                      htmlFor="email" 
-                      className="block text-sm font-medium text-gray-700 mb-2"
-                    >
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                       Adresse email
                     </label>
                     <input
@@ -157,18 +114,8 @@ export function ForgotPasswordPage() {
                     {isLoading ? (
                       <span className="flex items-center justify-center gap-2">
                         <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                          <circle 
-                            className="opacity-25" 
-                            cx="12" cy="12" r="10" 
-                            stroke="currentColor" 
-                            strokeWidth="4"
-                            fill="none"
-                          />
-                          <path 
-                            className="opacity-75" 
-                            fill="currentColor" 
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          />
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                         </svg>
                         Envoi en cours...
                       </span>

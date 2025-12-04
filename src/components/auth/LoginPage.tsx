@@ -1,12 +1,12 @@
 // ============================================================
-// ARPET - Login Page (Split Card Design)
-// Version: 2.0.0
+// ARPET - Login Page (Refactorisé)
+// Version: 2.2.0 - Utilise AuthBranding
 // ============================================================
 
 import { useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
-import { PlumbBob } from './PlumbBob'
+import { AuthBranding } from './AuthBranding'
 
 export function LoginPage() {
   const { signIn } = useAuth()
@@ -35,49 +35,15 @@ export function LoginPage() {
       {/* Split Card Container */}
       <div className="bg-white rounded-2xl shadow-2xl shadow-gray-200/50 w-full max-w-5xl flex flex-col md:flex-row min-h-[600px] overflow-hidden">
         
-        {/* ========================================= */}
-        {/* Partie GAUCHE : Branding                 */}
-        {/* ========================================= */}
-        <div className="w-full md:w-5/12 p-12 flex flex-col justify-center items-center relative text-center bg-gray-50 border-r border-gray-100 overflow-hidden">
-          {/* Motif subtil de fond */}
-          <div 
-            className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-[0.02]"
-            style={{
-              backgroundImage: 'radial-gradient(#1F2937 1px, transparent 1px)',
-              backgroundSize: '16px 16px'
-            }}
-          />
-          
-          {/* Logo + Fil à plomb */}
-          <div className="relative z-10 mb-8">
-            <h1 className="font-brand text-6xl text-gray-900 font-medium tracking-tight relative inline-block">
-              Arpet
-              <span className="relative inline-block">
-                .
-                {/* Le fil à plomb attaché au point */}
-                <PlumbBob />
-              </span>
-            </h1>
-          </div>
+        {/* Partie GAUCHE : Branding (factorisé) */}
+        <AuthBranding />
 
-          {/* Tagline */}
-          <blockquote className="max-w-xs mx-auto z-10 relative mt-16">
-            <p className="font-brand text-2xl text-gray-800 leading-snug">
-              "Il cherche les réponses,
-              <br />
-              <span className="font-semibold text-black">vous prenez les décisions."</span>
-            </p>
-          </blockquote>
-        </div>
-
-        {/* ========================================= */}
-        {/* Partie DROITE : Formulaire               */}
-        {/* ========================================= */}
+        {/* Partie DROITE : Formulaire */}
         <div className="w-full md:w-7/12 bg-white p-12 lg:p-16 flex flex-col justify-center">
           <div className="max-w-sm mx-auto w-full">
             {/* Header */}
             <div className="mb-10">
-              <h2 className="font-brand text-3xl text-gray-900 mb-2">Bienvenue</h2>
+              <h2 className="font-brand-bold text-3xl text-gray-900 mb-2">Bienvenue</h2>
               <p className="text-gray-500 text-sm">
                 Veuillez vous identifier pour accéder à vos chantiers.
               </p>
@@ -94,10 +60,7 @@ export function LoginPage() {
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Email */}
               <div>
-                <label 
-                  htmlFor="email" 
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                   Adresse email
                 </label>
                 <input
@@ -114,10 +77,7 @@ export function LoginPage() {
 
               {/* Mot de passe */}
               <div>
-                <label 
-                  htmlFor="password" 
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
                   Mot de passe
                 </label>
                 <div className="relative">
@@ -137,21 +97,14 @@ export function LoginPage() {
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 transition"
                     tabIndex={-1}
                   >
-                    {showPassword ? (
-                      <EyeOff className="w-5 h-5" />
-                    ) : (
-                      <Eye className="w-5 h-5" />
-                    )}
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
               </div>
 
               {/* Lien mot de passe oublié */}
               <div className="flex justify-end">
-                <a 
-                  href="/forgot-password"
-                  className="text-sm text-gray-500 hover:text-gray-900 transition"
-                >
+                <a href="/forgot-password" className="text-sm text-gray-500 hover:text-gray-900 transition">
                   Mot de passe oublié ?
                 </a>
               </div>
@@ -165,18 +118,8 @@ export function LoginPage() {
                 {isLoading ? (
                   <span className="flex items-center justify-center gap-2">
                     <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                      <circle 
-                        className="opacity-25" 
-                        cx="12" cy="12" r="10" 
-                        stroke="currentColor" 
-                        strokeWidth="4"
-                        fill="none"
-                      />
-                      <path 
-                        className="opacity-75" 
-                        fill="currentColor" 
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
                     Connexion...
                   </span>
@@ -190,10 +133,7 @@ export function LoginPage() {
             <div className="mt-10 pt-6 border-t border-gray-100 text-center">
               <p className="text-sm text-gray-500">
                 Pas encore de compte ?{' '}
-                <a 
-                  href="mailto:contact@arpet.fr" 
-                  className="text-gray-900 font-medium hover:underline"
-                >
+                <a href="mailto:contact@arpet.fr" className="text-gray-900 font-medium hover:underline">
                   Contactez votre administrateur
                 </a>
               </p>
