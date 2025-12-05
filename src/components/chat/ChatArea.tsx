@@ -17,7 +17,7 @@ const anecdotes = [
 ]
 
 export function ChatArea() {
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()  // ← Ajout de 'user' pour avoir l'ID
   const {
     messages,
     addMessage,
@@ -64,12 +64,14 @@ export function ChatArea() {
     try {
       // Debug: voir le contenu du profile
       console.log('Profile:', profile)
+      console.log('User ID:', user?.id)
       
       // Appeler la Edge Function 'baikal-brain'
       const { data, error } = await supabase.functions.invoke('baikal-brain', {
         body: {
           query: content,
-          vertical_id: profile?.vertical_id || 'arpet',
+          user_id: user?.id || null,           // ← AJOUT: user_id pour match_documents_v3
+          vertical_id: profile?.vertical_id || 'arpet',  // Gardé pour compatibilité
           org_id: profile?.org_id || null,
           project_id: activeProject?.id || null,
         }

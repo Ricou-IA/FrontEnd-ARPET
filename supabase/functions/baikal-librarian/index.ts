@@ -7,8 +7,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const DEFAULT_MATCH_THRESHOLD = 0.5
-const DEFAULT_MATCH_COUNT = 5
+const DEFAULT_MATCH_THRESHOLD = 0.3
+const DEFAULT_MATCH_COUNT = 10
 const MAX_CONTEXT_LENGTH = 12000
 const EMBEDDING_MODEL = 'text-embedding-ada-002'
 const LLM_MODEL = 'gpt-4o-mini'
@@ -33,9 +33,10 @@ FORMAT DE RÉPONSE:
 
 interface RequestBody {
   query: string
+  user_id: string              // REQUIS: pour récupérer le vertical_id via match_documents_v3
   org_id?: string
   project_id?: string
-  vertical_id?: string
+  vertical_id?: string         // Gardé pour compatibilité mais non utilisé
   match_threshold?: number
   match_count?: number
 }
@@ -96,9 +97,9 @@ function truncateContext(documents: DocumentMatch[], maxLength: number): string 
 
 function extractSources(documents: DocumentMatch[]): Source[] {
   return documents.map(doc => ({
-    document_id: doc.metadata?.document_id as string || String(doc.id),
+    document_id: doc.metadata?.document_id as string || doc.id,
     document_name: doc.metadata?.filename as string || doc.metadata?.source_file as string || 'Document inconnu',
-    chunk_id: String(doc.id),
+    chunk_id: doc.id,
     score: Math.round(doc.similarity * 100) / 100,
     content_preview: doc.content.substring(0, 150) + (doc.content.length > 150 ? '...' : '')
   }))
@@ -133,20 +134,26 @@ serve(async (req: Request): Promise<Response> => {
     const body: RequestBody = await req.json()
     const { 
       query, 
+      user_id,
       org_id, 
-      project_id, 
-      vertical_id,
+      project_id,
       match_threshold = DEFAULT_MATCH_THRESHOLD,
       match_count = DEFAULT_MATCH_COUNT 
     } = body
 
+    // Validation
     if (!query || query.trim().length === 0) {
       return errorResponse('Le champ "query" est requis', 400)
     }
 
-    console.log(`[baikal-librarian] Requête: "${query.substring(0, 100)}..."`)
-    console.log(`[baikal-librarian] Filtres: org_id=${org_id}, project_id=${project_id}, vertical_id=${vertical_id}`)
+    if (!user_id || user_id.trim().length === 0) {
+      return errorResponse('Le champ "user_id" est requis pour la recherche documentaire', 400)
+    }
 
+    console.log(`[baikal-librarian] Requête: "${query.substring(0, 100)}..."`)
+    console.log(`[baikal-librarian] user_id: ${user_id}`)
+
+    // 1. Générer l'embedding
     console.log('[baikal-librarian] Génération de l\'embedding...')
     
     const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
@@ -169,32 +176,42 @@ serve(async (req: Request): Promise<Response> => {
 
     const embeddingData = await embeddingResponse.json()
     const queryEmbedding = embeddingData.data[0].embedding
+    console.log('[baikal-librarian] Embedding généré, dimensions:', queryEmbedding.length)
 
-    console.log('[baikal-librarian] Recherche de documents similaires...')
+    // 2. Recherche vectorielle avec match_documents_v3 (récupère vertical_id depuis profiles)
+    console.log('[baikal-librarian] Recherche de documents (vertical récupéré depuis profil user)...')
     
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
     
-    // Construction des paramètres RPC (tous les paramètres doivent être passés)
-    const rpcParams = {
+    const rpcParams: Record<string, unknown> = {
       query_embedding: queryEmbedding,
+      p_user_id: user_id,                    // La fonction SQL récupère le vertical_id depuis profiles
       match_threshold: match_threshold,
       match_count: match_count,
-      filter_vertical: vertical_id || null,
-      filter_org: org_id || null,
-      filter_project: project_id || null,
     }
 
+    // Filtres optionnels
+    if (org_id) {
+      rpcParams.filter_org = org_id
+    }
+    if (project_id) {
+      rpcParams.filter_project = project_id
+    }
+
+    console.log('[baikal-librarian] Appel RPC match_documents_v3...')
+
     const { data: documents, error: searchError } = await supabase
-      .rpc('match_documents_v2', rpcParams)
+      .rpc('match_documents_v3', rpcParams)
 
     if (searchError) {
-      console.error('[baikal-librarian] Erreur recherche:', searchError)
+      console.error('[baikal-librarian] Erreur RPC:', searchError)
       return errorResponse(`Erreur recherche documents: ${searchError.message}`, 500)
     }
 
     const matchedDocs = documents as DocumentMatch[] || []
     console.log(`[baikal-librarian] ${matchedDocs.length} documents trouvés`)
 
+    // 3. Si aucun document trouvé
     if (matchedDocs.length === 0) {
       return jsonResponse({
         response: "Je n'ai trouvé aucun document pertinent pour répondre à votre question. Pouvez-vous reformuler ou préciser votre demande ?",
@@ -206,6 +223,7 @@ serve(async (req: Request): Promise<Response> => {
       })
     }
 
+    // 4. Construire le contexte et les sources
     const context = truncateContext(matchedDocs, MAX_CONTEXT_LENGTH)
     const sources = extractSources(matchedDocs)
 
@@ -219,6 +237,7 @@ serve(async (req: Request): Promise<Response> => {
       knowledgeType = 'organization'
     }
 
+    // 5. Générer la réponse avec le LLM
     console.log('[baikal-librarian] Génération de la réponse...')
 
     const userPrompt = `CONTEXTE DOCUMENTAIRE:

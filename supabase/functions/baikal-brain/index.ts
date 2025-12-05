@@ -2,7 +2,7 @@
 // ║  BAIKAL-BRAIN - Routeur Sémantique Intelligent                               ║
 // ║  Edge Function Supabase pour ARPET                                           ║
 // ╠══════════════════════════════════════════════════════════════════════════════╣
-// ║  Version: 2.0.0 - Avec délégation aux agents                                 ║
+// ║  Version: 2.1.0 - Avec user_id pour match_documents_v3                       ║
 // ║  Route vers: BIBLIOTHECAIRE (baikal-librarian) ou ANALYSTE (futur)           ║
 // ╚══════════════════════════════════════════════════════════════════════════════╝
 
@@ -52,9 +52,10 @@ ANALYSTE - Pour les questions nécessitant:
 
 interface RequestBody {
   query: string
+  user_id?: string           // ← AJOUTÉ: pour match_documents_v3
   org_id?: string
   project_id?: string
-  vertical_id?: string
+  vertical_id?: string       // Gardé pour compatibilité
   match_threshold?: number
   match_count?: number
 }
@@ -128,6 +129,7 @@ async function callLibrarian(
   const librarianUrl = `${supabaseUrl}/functions/v1/baikal-librarian`
   
   console.log(`[baikal-brain] Appel du Bibliothécaire: ${librarianUrl}`)
+  console.log(`[baikal-brain] user_id transmis: ${body.user_id}`)
   
   const response = await fetch(librarianUrl, {
     method: 'POST',
@@ -136,7 +138,7 @@ async function callLibrarian(
       'apikey': apiKey,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(body),  // Le body contient déjà user_id
   })
 
   // Retransmet la réponse du bibliothécaire
@@ -182,13 +184,14 @@ serve(async (req: Request): Promise<Response> => {
     const apiKey = req.headers.get('apikey') || ''
 
     const body: RequestBody = await req.json()
-    const { query } = body
+    const { query, user_id } = body
 
     if (!query || query.trim().length === 0) {
       return errorResponse('Le champ "query" est requis', 400)
     }
 
     console.log(`[baikal-brain] Requête reçue: "${query.substring(0, 80)}..."`)
+    console.log(`[baikal-brain] user_id: ${user_id}`)
 
     // ========================================
     // 2. ROUTAGE SÉMANTIQUE
