@@ -62,15 +62,16 @@ export function ChatArea() {
     setIsAgentTyping(true)
 
     try {
+      // Debug: voir le contenu du profile
+      console.log('Profile:', profile)
+      
       // Appeler la Edge Function 'baikal-brain'
       const { data, error } = await supabase.functions.invoke('baikal-brain', {
         body: {
           query: content,
-          filters: {
-            org_id: 'test_org',
-            project_id: 'test_project',
-            user_id: 'test_user'
-          }
+          vertical_id: profile?.vertical_id || 'arpet',
+          org_id: profile?.org_id || null,
+          project_id: activeProject?.id || null,
         }
       })
 
