@@ -1,5 +1,20 @@
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  BAIKAL-LIBRARIAN v4.2 - Agent RAG avec Hybrid Search                        ║
+// ║  Edge Function Supabase pour ARPET                                           ║
+// ╠══════════════════════════════════════════════════════════════════════════════╣
+// ║  Nouveautés v4.2:                                                            ║
+// ║  - Recherche Hybride: Vector + Full-text (match_documents_v5)                ║
+// ║  - Meilleure précision sur les références exactes (DTU, articles)            ║
+// ║  - Poids configurables vector_weight / fulltext_weight                       ║
+// ║  - Fallback sur v4 si v5 non disponible                                      ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,29 +22,27 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 }
 
-const DEFAULT_MATCH_THRESHOLD = 0.3
-const DEFAULT_MATCH_COUNT = 10
-const MAX_CONTEXT_LENGTH = 12000
-const EMBEDDING_MODEL = "text-embedding-3-small"
-const LLM_MODEL = "gpt-4o-mini"
-const LLM_TEMPERATURE = 0.3
-const LLM_MAX_TOKENS = 2048
+// Paramètres par défaut (peuvent être overridés par agent_prompts.parameters)
+const DEFAULT_CONFIG = {
+  match_threshold: 0.35,
+  match_count: 10,
+  max_context_length: 12000,
+  embedding_model: "text-embedding-3-small",
+  llm_model: "gpt-4o-mini",
+  temperature: 0.3,
+  max_tokens: 2048,
+  // Poids pour la recherche hybride
+  vector_weight: 0.7,
+  fulltext_weight: 0.3,
+}
 
-const SYSTEM_PROMPT = `Tu es ARPET, un assistant expert pour les conducteurs de travaux BTP.
-Tu reponds aux questions en te basant UNIQUEMENT sur le contexte documentaire fourni.
+// Prompt de fallback si aucun trouvé dans la base
+const FALLBACK_SYSTEM_PROMPT = `Tu es un assistant qui repond aux questions en te basant sur le contexte documentaire fourni.
+Base tes reponses sur le contexte. Ne jamais inventer. Cite les sources. Reponds en francais.`
 
-REGLES STRICTES:
-1. Base tes reponses EXCLUSIVEMENT sur le contexte fourni ci-dessous.
-2. Si le contexte ne contient pas l'information demandee, dis-le clairement : "Je n'ai pas trouve cette information dans les documents disponibles."
-3. Ne jamais inventer d'informations non presentes dans le contexte.
-4. Cite les sources pertinentes quand c'est possible (nom du document, section).
-5. Reponds en francais de maniere claire, professionnelle et concise.
-6. Pour les questions techniques BTP, privilegie les references aux normes DTU, CCTP ou reglementations citees.
-
-FORMAT DE REPONSE:
-- Commence par repondre directement a la question
-- Si pertinent, cite les documents sources entre parentheses
-- Termine par une note si des informations complementaires pourraient etre utiles`
+// ============================================================================
+// TYPES
+// ============================================================================
 
 interface RequestBody {
   query: string
@@ -39,6 +52,38 @@ interface RequestBody {
   vertical_id?: string
   match_threshold?: number
   match_count?: number
+  vector_weight?: number
+  fulltext_weight?: number
+}
+
+interface AgentPromptResult {
+  id: string
+  name: string
+  system_prompt: string
+  parameters: {
+    temperature?: number
+    max_tokens?: number
+    model?: string
+    vector_weight?: number
+    fulltext_weight?: number
+  }
+  resolution_level: string
+}
+
+interface UserContext {
+  vertical_id: string | null
+  org_id: string
+}
+
+interface AgentConfig {
+  system_prompt: string
+  temperature: number
+  max_tokens: number
+  model: string
+  prompt_name: string
+  resolution_level: string
+  vector_weight: number
+  fulltext_weight: number
 }
 
 interface DocumentMatch {
@@ -46,15 +91,50 @@ interface DocumentMatch {
   content: string
   metadata: Record<string, unknown>
   similarity: number
+  vector_score: number
+  fulltext_score: number
+  source_type: "document" | "qa_memory"
+  boost_level: string
+  target_projects: string[] | null
 }
 
 interface Source {
-  document_id: string
-  document_name: string
-  chunk_id: string
+  id: string
+  type: "document" | "qa_memory"
+  name: string
   score: number
+  vector_score?: number
+  fulltext_score?: number
+  authority_label?: string
   content_preview: string
+  qa_id?: string
 }
+
+interface ResponsePayload {
+  response: string
+  sources: Source[]
+  knowledge_type: string
+  status: string
+  processing_time_ms: number
+  documents_found: number
+  qa_memory_found: number
+  model: string
+  embedding_model: string
+  search_type: "hybrid" | "vector_only"
+  prompt_used: string
+  prompt_resolution: string
+  vertical_id: string | null
+  can_vote: boolean
+  vote_context?: {
+    question: string
+    answer: string
+    source_ids: string[]
+  }
+}
+
+// ============================================================================
+// FONCTIONS UTILITAIRES
+// ============================================================================
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -73,19 +153,115 @@ function errorResponse(message: string, status = 500): Response {
   }, status)
 }
 
-function truncateContext(documents: DocumentMatch[], maxLength: number): string {
+/**
+ * Récupère le contexte utilisateur depuis son profil
+ */
+async function getUserContext(
+  supabase: ReturnType<typeof createClient>,
+  userId: string
+): Promise<UserContext> {
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("vertical_id, org_id")
+    .eq("id", userId)
+    .single()
+
+  if (error || !profile) {
+    console.warn("[baikal-librarian] Profil non trouvé pour user:", userId)
+    return { vertical_id: null, org_id: "" }
+  }
+
+  return {
+    vertical_id: profile.vertical_id,
+    org_id: profile.org_id
+  }
+}
+
+/**
+ * Récupère la configuration de l'agent (prompt + paramètres) depuis agent_prompts
+ * Utilise la fonction SQL get_agent_prompt pour la résolution hiérarchique
+ */
+async function getAgentConfig(
+  supabase: ReturnType<typeof createClient>,
+  agentType: string,
+  verticalId: string | null,
+  orgId: string | null
+): Promise<AgentConfig> {
+  const { data, error } = await supabase
+    .rpc("get_agent_prompt", {
+      p_agent_type: agentType,
+      p_vertical_id: verticalId,
+      p_org_id: orgId
+    })
+
+  if (error) {
+    console.error("[baikal-librarian] Erreur get_agent_prompt:", error)
+  }
+
+  const result = data?.[0] as AgentPromptResult | undefined
+
+  if (!result) {
+    console.warn("[baikal-librarian] Aucun prompt trouvé, utilisation du fallback")
+    return {
+      system_prompt: FALLBACK_SYSTEM_PROMPT,
+      temperature: DEFAULT_CONFIG.temperature,
+      max_tokens: DEFAULT_CONFIG.max_tokens,
+      model: DEFAULT_CONFIG.llm_model,
+      prompt_name: "Fallback",
+      resolution_level: "fallback",
+      vector_weight: DEFAULT_CONFIG.vector_weight,
+      fulltext_weight: DEFAULT_CONFIG.fulltext_weight
+    }
+  }
+
+  console.log(`[baikal-librarian] Prompt chargé: "${result.name}" (${result.resolution_level})`)
+
+  return {
+    system_prompt: result.system_prompt,
+    temperature: result.parameters?.temperature ?? DEFAULT_CONFIG.temperature,
+    max_tokens: result.parameters?.max_tokens ?? DEFAULT_CONFIG.max_tokens,
+    model: result.parameters?.model ?? DEFAULT_CONFIG.llm_model,
+    prompt_name: result.name,
+    resolution_level: result.resolution_level,
+    vector_weight: result.parameters?.vector_weight ?? DEFAULT_CONFIG.vector_weight,
+    fulltext_weight: result.parameters?.fulltext_weight ?? DEFAULT_CONFIG.fulltext_weight
+  }
+}
+
+/**
+ * Construit le contexte pour le LLM avec distinction des types de sources
+ */
+function buildContext(documents: DocumentMatch[], maxLength: number): string {
   let context = ""
   let currentLength = 0
   
-  for (const doc of documents) {
-    const filename = doc.metadata?.filename || doc.metadata?.source_file || "inconnu"
-    const docText = "\n---\n[Document: " + filename + "]\n" + doc.content + "\n"
+  // Trier par score hybride (déjà fait en SQL, mais on s'assure)
+  const sorted = [...documents].sort((a, b) => b.similarity - a.similarity)
+  
+  for (const doc of sorted) {
+    let docText = ""
+    const metadata = doc.metadata || {}
+    
+    if (doc.source_type === "qa_memory") {
+      const authorityLabel = metadata.authority_label as string
+      const badge = authorityLabel === "expert" ? "⭐ Expert" 
+                  : authorityLabel === "team" ? "✓ Équipe" 
+                  : "Utilisateur"
+      docText = `\n---\n[Reponse validee ${badge}]\n${doc.content}\n`
+    } else {
+      // Document classique
+      const filename = (metadata.filename as string) 
+                    || (metadata.source_file as string)
+                    || (metadata.code_name ? `${metadata.code_name} - Art. ${metadata.article_num}` : null)
+                    || "Document"
+      
+      // Indicateur de match (vector vs fulltext)
+      const matchType = doc.fulltext_score > 0.1 ? "[Match exact] " : ""
+      
+      docText = `\n---\n${matchType}[${filename}]\n${doc.content}\n`
+    }
     
     if (currentLength + docText.length > maxLength) {
-      const remainingSpace = maxLength - currentLength
-      if (remainingSpace > 100) {
-        context += docText.substring(0, remainingSpace) + "...[tronque]"
-      }
       break
     }
     
@@ -96,32 +272,129 @@ function truncateContext(documents: DocumentMatch[], maxLength: number): string 
   return context
 }
 
+/**
+ * Extrait les sources pour la réponse API
+ */
 function extractSources(documents: DocumentMatch[]): Source[] {
-  return documents.map(doc => ({
-    document_id: (doc.metadata?.document_id as string) || doc.id,
-    document_name: (doc.metadata?.filename as string) || (doc.metadata?.source_file as string) || "Document inconnu",
-    chunk_id: doc.id,
-    score: Math.round(doc.similarity * 100) / 100,
-    content_preview: doc.content.substring(0, 150) + (doc.content.length > 150 ? "..." : "")
-  }))
+  return documents.map(doc => {
+    const metadata = doc.metadata || {}
+    
+    if (doc.source_type === "qa_memory") {
+      const question = metadata.question as string || ""
+      return {
+        id: `qa_${doc.id}`,
+        type: "qa_memory" as const,
+        name: `Réponse validée: "${question.substring(0, 50)}${question.length > 50 ? '...' : ''}"`,
+        score: doc.similarity,
+        vector_score: doc.vector_score,
+        fulltext_score: doc.fulltext_score,
+        authority_label: metadata.authority_label as string,
+        content_preview: doc.content.substring(0, 200),
+        qa_id: doc.id
+      }
+    }
+    
+    // Document classique
+    const name = (metadata.filename as string) 
+              || (metadata.source_file as string)
+              || (metadata.code_name ? `${metadata.code_name} - Art. ${metadata.article_num}` : null)
+              || "Document"
+    
+    return {
+      id: `doc_${doc.id}`,
+      type: "document" as const,
+      name: name,
+      score: doc.similarity,
+      vector_score: doc.vector_score,
+      fulltext_score: doc.fulltext_score,
+      content_preview: doc.content.substring(0, 200)
+    }
+  })
 }
 
-serve(async (req: Request): Promise<Response> => {
-  const startTime = Date.now()
+/**
+ * Détermine le type de connaissance principal
+ */
+function determineKnowledgeType(
+  documents: DocumentMatch[],
+  userId: string,
+  projectId: string | undefined,
+  orgId: string
+): string {
+  if (documents.length === 0) return "none"
   
+  // Vérifier si on a des qa_memory avec haut niveau d'autorité
+  const expertQA = documents.find(d => 
+    d.source_type === "qa_memory" && d.metadata?.authority_label === "expert"
+  )
+  if (expertQA) return "expert_validated"
+  
+  const teamQA = documents.find(d => 
+    d.source_type === "qa_memory" && d.metadata?.authority_label === "team"
+  )
+  if (teamQA) return "team_validated"
+  
+  // Vérifier les niveaux de documents
+  const userDoc = documents.find(d => 
+    d.source_type === "document" && d.metadata?.user_id === userId
+  )
+  if (userDoc) return "personal"
+  
+  const projectDoc = documents.find(d => 
+    d.source_type === "document" && 
+    projectId && 
+    (d.target_projects || []).includes(projectId)
+  )
+  if (projectDoc) return "project"
+  
+  const orgDoc = documents.find(d => 
+    d.source_type === "document" && d.metadata?.org_id === orgId
+  )
+  if (orgDoc) return "organization"
+  
+  return "shared"
+}
+
+/**
+ * Log l'usage des qa_memory utilisées
+ */
+async function logQAUsage(
+  supabase: ReturnType<typeof createClient>,
+  documents: DocumentMatch[]
+): Promise<void> {
+  const qaMemoryIds = documents
+    .filter(d => d.source_type === "qa_memory")
+    .map(d => d.id)
+  
+  for (const qaId of qaMemoryIds) {
+    try {
+      await supabase.rpc("log_qa_usage", { p_row_id: qaId })
+    } catch (e) {
+      console.warn("[baikal-librarian] Erreur log_qa_usage:", e)
+    }
+  }
+}
+
+// ============================================================================
+// HANDLER PRINCIPAL
+// ============================================================================
+
+serve(async (req: Request) => {
+  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders })
   }
 
-  if (req.method !== "POST") {
-    return errorResponse("Methode non autorisee. Utilisez POST.", 405)
-  }
+  const startTime = Date.now()
 
   try {
+    // ========================================
+    // 1. VALIDATION
+    // ========================================
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")
     const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
-    
+
     if (!OPENAI_API_KEY) {
       return errorResponse("OPENAI_API_KEY manquant dans les secrets", 500)
     }
@@ -138,8 +411,10 @@ serve(async (req: Request): Promise<Response> => {
       user_id,
       org_id, 
       project_id,
-      match_threshold = DEFAULT_MATCH_THRESHOLD,
-      match_count = DEFAULT_MATCH_COUNT 
+      match_threshold = DEFAULT_CONFIG.match_threshold,
+      match_count = DEFAULT_CONFIG.match_count,
+      vector_weight,
+      fulltext_weight
     } = body
 
     if (!query || query.trim().length === 0) {
@@ -147,22 +422,58 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     if (!user_id || user_id.trim().length === 0) {
-      return errorResponse("Le champ user_id est requis pour la recherche documentaire", 400)
+      return errorResponse("Le champ user_id est requis", 400)
     }
 
+    console.log("[baikal-librarian] ========================================")
+    console.log("[baikal-librarian] v4.2 - Hybrid Search")
     console.log("[baikal-librarian] Requete:", query.substring(0, 100))
     console.log("[baikal-librarian] user_id:", user_id)
 
-    console.log("[baikal-librarian] Generation de l embedding...")
+    // ========================================
+    // 2. RÉCUPÉRATION CONTEXTE UTILISATEUR
+    // ========================================
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    
+    const userContext = await getUserContext(supabase, user_id)
+    const effectiveOrgId = org_id || userContext.org_id
+    
+    console.log("[baikal-librarian] vertical_id:", userContext.vertical_id)
+    console.log("[baikal-librarian] org_id:", effectiveOrgId)
+    console.log("[baikal-librarian] project_id:", project_id)
+
+    // ========================================
+    // 3. CHARGEMENT CONFIG AGENT (PROMPT DYNAMIQUE)
+    // ========================================
+    const agentConfig = await getAgentConfig(
+      supabase,
+      "librarian",
+      userContext.vertical_id,
+      effectiveOrgId || null
+    )
+
+    // Override des poids si fournis dans la requête
+    const effectiveVectorWeight = vector_weight ?? agentConfig.vector_weight
+    const effectiveFulltextWeight = fulltext_weight ?? agentConfig.fulltext_weight
+
+    console.log("[baikal-librarian] Prompt:", agentConfig.prompt_name)
+    console.log("[baikal-librarian] Resolution:", agentConfig.resolution_level)
+    console.log("[baikal-librarian] Model:", agentConfig.model)
+    console.log("[baikal-librarian] Weights: vector=", effectiveVectorWeight, "fulltext=", effectiveFulltextWeight)
+
+    // ========================================
+    // 4. GÉNÉRATION DE L'EMBEDDING
+    // ========================================
+    console.log("[baikal-librarian] Generation de l'embedding...")
     
     const embeddingResponse = await fetch("https://api.openai.com/v1/embeddings", {
       method: "POST",
       headers: {
-        "Authorization": "Bearer " + OPENAI_API_KEY,
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: EMBEDDING_MODEL,
+        model: DEFAULT_CONFIG.embedding_model,
         input: query.trim(),
       }),
     })
@@ -170,44 +481,103 @@ serve(async (req: Request): Promise<Response> => {
     if (!embeddingResponse.ok) {
       const errorData = await embeddingResponse.json()
       console.error("[baikal-librarian] OpenAI Embedding Error:", errorData)
-      return errorResponse("Erreur OpenAI Embedding: " + (errorData.error?.message || "Erreur inconnue"), 500)
+      return errorResponse(`Erreur OpenAI Embedding: ${errorData.error?.message || "Erreur inconnue"}`, 500)
     }
 
     const embeddingData = await embeddingResponse.json()
     const queryEmbedding = embeddingData.data[0].embedding
     console.log("[baikal-librarian] Embedding genere, dimensions:", queryEmbedding.length)
 
-    console.log("[baikal-librarian] Recherche de documents...")
+    // ========================================
+    // 5. RECHERCHE HYBRIDE (match_documents_v5)
+    // ========================================
+    console.log("[baikal-librarian] Recherche hybride v5...")
     
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-    
-    const rpcParams: Record<string, unknown> = {
+    let matchedDocs: DocumentMatch[] = []
+    let searchType: "hybrid" | "vector_only" = "hybrid"
+
+    const rpcParamsV5: Record<string, unknown> = {
       query_embedding: queryEmbedding,
+      query_text: query.trim(),  // Nouveau: texte brut pour full-text
       p_user_id: user_id,
       match_threshold: match_threshold,
       match_count: match_count,
+      vector_weight: effectiveVectorWeight,
+      fulltext_weight: effectiveFulltextWeight,
     }
 
-    if (org_id) {
-      rpcParams.filter_org = org_id
+    if (effectiveOrgId) {
+      rpcParamsV5.filter_org = effectiveOrgId
     }
     if (project_id) {
-      rpcParams.filter_project = project_id
+      rpcParamsV5.filter_project = project_id
     }
 
-    console.log("[baikal-librarian] Appel RPC match_documents_v3...")
+    const { data: documentsV5, error: searchErrorV5 } = await supabase
+      .rpc("match_documents_v5", rpcParamsV5)
 
-    const { data: documents, error: searchError } = await supabase
-      .rpc("match_documents_v3", rpcParams)
-
-    if (searchError) {
-      console.error("[baikal-librarian] Erreur RPC:", searchError)
-      return errorResponse("Erreur recherche documents: " + searchError.message, 500)
+    if (searchErrorV5) {
+      console.warn("[baikal-librarian] Erreur match_documents_v5, fallback sur v4:", searchErrorV5.message)
+      searchType = "vector_only"
+      
+      // Fallback sur v4 (vector seul)
+      const rpcParamsV4: Record<string, unknown> = {
+        query_embedding: queryEmbedding,
+        p_user_id: user_id,
+        match_threshold: match_threshold,
+        match_count: match_count,
+      }
+      
+      if (effectiveOrgId) {
+        rpcParamsV4.filter_org = effectiveOrgId
+      }
+      if (project_id) {
+        rpcParamsV4.filter_project = project_id
+      }
+      
+      const { data: documentsV4, error: errorV4 } = await supabase
+        .rpc("match_documents_v4", rpcParamsV4)
+      
+      if (errorV4) {
+        console.warn("[baikal-librarian] Erreur match_documents_v4, fallback sur v3:", errorV4.message)
+        
+        const { data: documentsV3, error: errorV3 } = await supabase
+          .rpc("match_documents_v3", rpcParamsV4)
+        
+        if (errorV3) {
+          return errorResponse(`Erreur recherche: ${errorV3.message}`, 500)
+        }
+        
+        matchedDocs = (documentsV3 || []).map((d: Record<string, unknown>) => ({
+          ...d,
+          source_type: "document" as const,
+          vector_score: d.similarity as number,
+          fulltext_score: 0,
+          boost_level: "vertical",
+          target_projects: null
+        }))
+      } else {
+        matchedDocs = (documentsV4 || []).map((d: Record<string, unknown>) => ({
+          ...d,
+          vector_score: d.similarity as number,
+          fulltext_score: 0,
+        })) as DocumentMatch[]
+      }
+    } else {
+      matchedDocs = (documentsV5 as DocumentMatch[]) || []
     }
 
-    const matchedDocs = (documents as DocumentMatch[]) || []
-    console.log("[baikal-librarian] " + matchedDocs.length + " documents trouves")
+    // Compteurs
+    const docCount = matchedDocs.filter(d => d.source_type === "document").length
+    const qaCount = matchedDocs.filter(d => d.source_type === "qa_memory").length
+    const fulltextMatches = matchedDocs.filter(d => d.fulltext_score > 0.1).length
+    
+    console.log(`[baikal-librarian] Resultats: ${docCount} docs, ${qaCount} qa_memory`)
+    console.log(`[baikal-librarian] Dont ${fulltextMatches} avec match full-text`)
 
+    // ========================================
+    // 6. CAS SANS RÉSULTATS
+    // ========================================
     if (matchedDocs.length === 0) {
       return jsonResponse({
         response: "Je n'ai trouve aucun document pertinent pour repondre a votre question. Pouvez-vous reformuler ou preciser votre demande ?",
@@ -215,39 +585,51 @@ serve(async (req: Request): Promise<Response> => {
         knowledge_type: "none",
         status: "success",
         processing_time_ms: Date.now() - startTime,
-        documents_found: 0
-      })
+        documents_found: 0,
+        qa_memory_found: 0,
+        model: agentConfig.model,
+        embedding_model: DEFAULT_CONFIG.embedding_model,
+        search_type: searchType,
+        prompt_used: agentConfig.prompt_name,
+        prompt_resolution: agentConfig.resolution_level,
+        vertical_id: userContext.vertical_id,
+        can_vote: true,
+        vote_context: { question: query, answer: "", source_ids: [] }
+      } as ResponsePayload)
     }
 
-    const context = truncateContext(matchedDocs, MAX_CONTEXT_LENGTH)
+    // ========================================
+    // 7. CONSTRUCTION CONTEXTE & SOURCES
+    // ========================================
+    const context = buildContext(matchedDocs, DEFAULT_CONFIG.max_context_length)
     const sources = extractSources(matchedDocs)
+    const knowledgeType = determineKnowledgeType(matchedDocs, user_id, project_id, effectiveOrgId)
 
-    let knowledgeType = "shared"
-    if (project_id && matchedDocs.some(d => {
-      const projects = d.metadata?.target_projects as string[] | undefined
-      return projects && projects.includes(project_id)
-    })) {
-      knowledgeType = "project"
-    } else if (org_id && matchedDocs.some(d => d.metadata?.org_id === org_id)) {
-      knowledgeType = "organization"
-    }
+    // ========================================
+    // 8. GÉNÉRATION RÉPONSE LLM
+    // ========================================
+    console.log("[baikal-librarian] Generation LLM avec", agentConfig.model)
 
-    console.log("[baikal-librarian] Generation de la reponse...")
+    const userPrompt = `CONTEXTE DOCUMENTAIRE:
+${context}
 
-    const userPrompt = "CONTEXTE DOCUMENTAIRE:\n" + context + "\n\nQUESTION DE L'UTILISATEUR:\n" + query + "\n\nReponds a la question en te basant uniquement sur le contexte fourni."
+QUESTION DE L'UTILISATEUR:
+${query}
+
+Reponds a la question en te basant sur le contexte fourni.`
 
     const llmResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": "Bearer " + OPENAI_API_KEY,
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: LLM_MODEL,
-        temperature: LLM_TEMPERATURE,
-        max_tokens: LLM_MAX_TOKENS,
+        model: agentConfig.model,
+        temperature: agentConfig.temperature,
+        max_tokens: agentConfig.max_tokens,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: agentConfig.system_prompt },
           { role: "user", content: userPrompt }
         ],
       }),
@@ -256,14 +638,22 @@ serve(async (req: Request): Promise<Response> => {
     if (!llmResponse.ok) {
       const errorData = await llmResponse.json()
       console.error("[baikal-librarian] OpenAI LLM Error:", errorData)
-      return errorResponse("Erreur generation reponse: " + (errorData.error?.message || "Erreur inconnue"), 500)
+      return errorResponse(`Erreur LLM: ${errorData.error?.message || "Erreur inconnue"}`, 500)
     }
 
     const llmData = await llmResponse.json()
     const answer = llmData.choices?.[0]?.message?.content || "Desole, je n'ai pas pu generer de reponse."
 
+    // ========================================
+    // 9. LOG USAGE QA_MEMORY
+    // ========================================
+    await logQAUsage(supabase, matchedDocs)
+
+    // ========================================
+    // 10. RÉPONSE FINALE
+    // ========================================
     const processingTime = Date.now() - startTime
-    console.log("[baikal-librarian] Reponse generee en " + processingTime + "ms")
+    console.log(`[baikal-librarian] Reponse generee en ${processingTime}ms (${searchType})`)
 
     return jsonResponse({
       response: answer,
@@ -271,10 +661,21 @@ serve(async (req: Request): Promise<Response> => {
       knowledge_type: knowledgeType,
       status: "success",
       processing_time_ms: processingTime,
-      documents_found: matchedDocs.length,
-      model: LLM_MODEL,
-      embedding_model: EMBEDDING_MODEL
-    })
+      documents_found: docCount,
+      qa_memory_found: qaCount,
+      model: agentConfig.model,
+      embedding_model: DEFAULT_CONFIG.embedding_model,
+      search_type: searchType,
+      prompt_used: agentConfig.prompt_name,
+      prompt_resolution: agentConfig.resolution_level,
+      vertical_id: userContext.vertical_id,
+      can_vote: true,
+      vote_context: {
+        question: query,
+        answer: answer,
+        source_ids: matchedDocs.map(d => d.id)
+      }
+    } as ResponsePayload)
 
   } catch (error) {
     console.error("[baikal-librarian] Erreur non geree:", error)
