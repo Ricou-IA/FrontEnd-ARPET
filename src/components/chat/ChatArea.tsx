@@ -1,3 +1,9 @@
+// ============================================================
+// ARPET - ChatArea Component
+// Version: 2.1.0 - Fix: Ajout mapping vote_context + can_vote
+// Date: 2025-12-05
+// ============================================================
+
 import { useAppStore } from '../../stores/appStore'
 import { useAuth } from '../../hooks/useAuth'
 import { MessageBubble } from './MessageBubble'
@@ -66,22 +72,20 @@ export function ChatArea() {
       const { data: { session } } = await supabase.auth.getSession()
       const userId = session?.user?.id || null
       
-      console.log('User ID (from session):', userId)
-      console.log('Profile:', profile)
+      console.log('[ChatArea] User ID:', userId)
       
       // Appeler la Edge Function 'baikal-brain'
       const { data, error } = await supabase.functions.invoke('baikal-brain', {
         body: {
           query: content,
-          user_id: userId,                     // ← user_id depuis la session
+          user_id: userId,
           org_id: profile?.org_id || null,
           project_id: activeProject?.id || null,
         }
       })
 
       if (error) {
-        console.error('Erreur lors de l\'appel à la Edge Function:', error)
-        // Afficher un message d'erreur à l'utilisateur
+        console.error('[ChatArea] Erreur Edge Function:', error)
         const errorMessage: Message = {
           id: crypto.randomUUID(),
           role: 'assistant',
@@ -93,19 +97,16 @@ export function ChatArea() {
         return
       }
 
-      // Afficher la réponse dans la console pour debug
-      console.log('Réponse de la Edge Function:', data)
+      console.log('[ChatArea] Réponse Edge Function:', data)
 
-      // Traiter la réponse (peut contenir "destination" ou "response")
+      // Traiter la réponse
       let responseContent = ''
       if (data) {
         if (data.response) {
-          // Réponse directe de l'agent
           responseContent = typeof data.response === 'string' 
             ? data.response 
             : JSON.stringify(data.response)
         } else if (data.destination) {
-          // Routeur - destination indiquée avec reasoning
           const destinationName = data.destination === 'BIBLIOTHECAIRE' 
             ? 'Bibliothécaire' 
             : data.destination === 'ANALYSTE' 
@@ -114,27 +115,49 @@ export function ChatArea() {
           
           responseContent = `🔀 **Routeur** : Redirection vers l'agent **${destinationName}**\n\n${data.reasoning || data.message || 'Analyse de la requête en cours...'}`
         } else {
-          // Format inconnu, afficher tout le contenu
           responseContent = JSON.stringify(data, null, 2)
         }
       }
 
-      // Ajouter la réponse de l'assistant
+      // ================================================================
+      // FIX v2.1: Mapping complet incluant vote_context et can_vote
+      // ================================================================
       const assistantMessage: Message = {
         id: crypto.randomUUID(),
         role: 'assistant',
         content: responseContent || 'Aucune réponse reçue.',
         timestamp: new Date(),
-        // Metadata optionnelle si disponible dans la réponse
+        
+        // Metadata existantes
         knowledge_type: data?.knowledge_type,
-        validation_count: data?.validation_count,
+        validation_count: data?.validation_count || 0,
         agent_source: data?.agent_source,
         sources: data?.sources,
+        
+        // Nouvelles metadata v2
+        documents_found: data?.documents_found,
+        qa_memory_found: data?.qa_memory_found,
+        processing_time_ms: data?.processing_time_ms,
+        prompt_used: data?.prompt_used,
+        prompt_resolution: data?.prompt_resolution,
+        
+        // ✅ FIX: Ajout du système de vote
+        can_vote: data?.can_vote ?? true,  // Par défaut true si non spécifié
+        vote_context: data?.vote_context || {
+          question: content,
+          answer: responseContent,
+          source_ids: data?.sources?.map((s: { id?: string }) => s.id).filter(Boolean) || []
+        },
+        
+        // État UI
+        user_vote: null,
+        isAnchored: false,
       }
+      
       addMessage(assistantMessage)
+      
     } catch (err) {
-      console.error('Erreur lors de l\'envoi du message:', err)
-      // Afficher un message d'erreur à l'utilisateur
+      console.error('[ChatArea] Erreur envoi message:', err)
       const errorMessage: Message = {
         id: crypto.randomUUID(),
         role: 'assistant',
@@ -147,20 +170,17 @@ export function ChatArea() {
     }
   }
 
-  // Ancrer un message dans le bac à sable (persisté dans Supabase)
+  // Ancrer un message dans le bac à sable
   const handleAnchorMessage = async (message: Message) => {
     // Trouver la question correspondante
     const userQuestion = messages.find(
       m => m.role === 'user' && m.timestamp < message.timestamp
     )?.content || ''
 
-    // Générer un titre à partir du contenu
     const title = generateTitleFromContent(message.content)
 
-    // Créer le content pour le sandbox
     const content = createEmptySandboxContent(title, userQuestion)
     
-    // Ajouter les messages de la conversation
     if (userQuestion) {
       content.messages.push({
         role: 'user',
@@ -174,7 +194,6 @@ export function ChatArea() {
       at: new Date().toISOString(),
     })
 
-    // Créer l'item dans Supabase
     const { data, error } = await createSandboxItem({
       title,
       project_id: activeProject?.id || null,
@@ -182,16 +201,20 @@ export function ChatArea() {
     })
 
     if (error) {
-      console.error('Erreur lors de l\'ancrage:', error)
-      // TODO: Afficher une notification d'erreur
+      console.error('[ChatArea] Erreur ancrage:', error)
       return
     }
 
     if (data) {
-      console.log('Message ancré:', data.id)
+      console.log('[ChatArea] Message ancré:', data.id)
       setMessageAnchored(message.id)
-      // TODO: Afficher une notification de succès
     }
+  }
+
+  // Callback quand un vote est complété
+  const handleVoteComplete = (message: Message, voteType: 'up' | 'down', qaId?: string) => {
+    console.log('[ChatArea] Vote complété:', { messageId: message.id, voteType, qaId })
+    // Optionnel: mettre à jour l'état du message dans le store si nécessaire
   }
 
   return (
@@ -224,6 +247,7 @@ export function ChatArea() {
               key={message.id}
               message={message}
               onAnchor={handleAnchorMessage}
+              onVoteComplete={handleVoteComplete}
             />
           ))}
 
@@ -231,7 +255,7 @@ export function ChatArea() {
           {isAgentTyping && (
             <div className="flex gap-4">
               <div className="w-8 h-8 rounded-full bg-stone-800 flex items-center justify-center text-white font-serif italic text-sm flex-shrink-0 mt-1">
-                L
+                A
               </div>
               <div className="bg-white border border-stone-100 p-4 rounded-r-xl rounded-bl-xl shadow-sm">
                 <div className="flex gap-1">
@@ -256,7 +280,6 @@ export function ChatArea() {
 
 // Helper pour générer un titre à partir du contenu
 function generateTitleFromContent(content: string): string {
-  // Extraire les premiers mots significatifs
   const words = content.split(' ').slice(0, 5).join(' ')
   if (words.length > 40) {
     return words.substring(0, 40) + '...'
