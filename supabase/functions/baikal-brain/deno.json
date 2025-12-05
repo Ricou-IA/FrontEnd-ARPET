@@ -1,0 +1,6 @@
+{
+    "imports": {
+      "langsmith": "https://esm.sh/langsmith@0.1.5",
+      "openai": "https://esm.sh/openai@4.26.0"
+    }
+  }
