@@ -1,7 +1,7 @@
 // ============================================================
 // ARPET - App Store (Zustand)
-// Version: 2.1.0 - FIX ALT+TAB bug
-// Date: 2025-12-04
+// Version: 3.0.0 - Compatible migration schémas
+// Date: 2025-12-11
 // ============================================================
 
 import { create } from 'zustand'

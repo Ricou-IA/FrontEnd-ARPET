@@ -1,7 +1,7 @@
 // ============================================================
 // ARPET - Sandbox Service (Supabase)
-// Version: 1.1.0 - Fix RPC calls + error handling
-// Date: 2025-12-04
+// Version: 2.0.0 - Migration vers schémas dédiés
+// Date: 2025-12-11
 // ============================================================
 
 import { supabase } from '@/lib/supabase';
@@ -39,8 +39,9 @@ async function getCurrentProfile() {
   const user = await getCurrentUser();
   
   const { data: profile, error } = await supabase
+    .schema('core')
     .from('profiles')
-    .select('id, vertical_id, org_id')
+    .select('id, app_id, org_id')
     .eq('id', user.id)
     .single();
   
@@ -63,6 +64,7 @@ export async function getSandboxItems(
 ): Promise<ServiceResult<SandboxItem[]>> {
   try {
     let query = supabase
+      .schema('arpet')
       .from('sandbox_items')
       .select('*')
       .order('updated_at', { ascending: false });
@@ -89,6 +91,7 @@ export async function getSandboxItemById(
 ): Promise<ServiceResult<SandboxItem>> {
   try {
     const { data, error } = await supabase
+      .schema('arpet')
       .from('sandbox_items')
       .select('*')
       .eq('id', id)
@@ -121,7 +124,7 @@ export async function createSandboxItem(
     };
     
     const insertData = {
-      vertical_id: profile.vertical_id,
+      app_id: profile.app_id,
       org_id: profile.org_id,
       user_id: profile.id,
       project_id: input.project_id || null,
@@ -135,6 +138,7 @@ export async function createSandboxItem(
     console.log('📝 Creating sandbox item:', insertData.title);
     
     const { data, error } = await supabase
+      .schema('arpet')
       .from('sandbox_items')
       .insert(insertData)
       .select()
@@ -166,6 +170,7 @@ export async function updateSandboxItem(
 ): Promise<ServiceResult<SandboxItem>> {
   try {
     const { data, error } = await supabase
+      .schema('arpet')
       .from('sandbox_items')
       .update({
         ...input,
@@ -193,6 +198,7 @@ export async function updateSandboxContent(
   try {
     // Récupère d'abord le content actuel
     const { data: current, error: fetchError } = await supabase
+      .schema('arpet')
       .from('sandbox_items')
       .select('content')
       .eq('id', id)
@@ -207,6 +213,7 @@ export async function updateSandboxContent(
     };
     
     const { data, error } = await supabase
+      .schema('arpet')
       .from('sandbox_items')
       .update({ 
         content: mergedContent,
@@ -225,8 +232,7 @@ export async function updateSandboxContent(
 }
 
 // ============================================================
-// ACTIONS WORKFLOW (via RPC)
-// FIX: Meilleure gestion des retours RPC
+// ACTIONS WORKFLOW (UPDATE direct - pas de RPC)
 // ============================================================
 
 /**
@@ -239,29 +245,22 @@ export async function pinSandboxItem(
     console.log('📌 Pinning sandbox item:', id);
     
     const { data, error } = await supabase
-      .rpc('pin_sandbox_item', { item_id: id });
+      .schema('arpet')
+      .from('sandbox_items')
+      .update({
+        status: 'pinned',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
     
     if (error) {
-      console.error('❌ Pin RPC error:', error);
+      console.error('❌ Pin error:', error);
       throw error;
     }
     
-    // La RPC retourne l'item modifié directement
-    // Si data est null, on refetch l'item
-    if (!data) {
-      console.log('⚠️ RPC returned null, refetching item...');
-      const { data: refetched, error: refetchError } = await supabase
-        .from('sandbox_items')
-        .select('*')
-        .eq('id', id)
-        .single();
-      
-      if (refetchError) throw refetchError;
-      console.log('✅ Item pinned (refetched):', refetched.status);
-      return { data: refetched, error: null };
-    }
-    
-    console.log('✅ Item pinned:', data);
+    console.log('✅ Item pinned:', data.id);
     return { data, error: null };
   } catch (error) {
     console.error('pinSandboxItem error:', error);
@@ -279,25 +278,22 @@ export async function unpinSandboxItem(
     console.log('📍 Unpinning sandbox item:', id);
     
     const { data, error } = await supabase
-      .rpc('unpin_sandbox_item', { item_id: id });
+      .schema('arpet')
+      .from('sandbox_items')
+      .update({
+        status: 'draft',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
     
     if (error) {
-      console.error('❌ Unpin RPC error:', error);
+      console.error('❌ Unpin error:', error);
       throw error;
     }
     
-    if (!data) {
-      const { data: refetched, error: refetchError } = await supabase
-        .from('sandbox_items')
-        .select('*')
-        .eq('id', id)
-        .single();
-      
-      if (refetchError) throw refetchError;
-      return { data: refetched, error: null };
-    }
-    
-    console.log('✅ Item unpinned:', data);
+    console.log('✅ Item unpinned:', data.id);
     return { data, error: null };
   } catch (error) {
     console.error('unpinSandboxItem error:', error);
@@ -315,25 +311,22 @@ export async function archiveSandboxItem(
     console.log('🗃️ Archiving sandbox item:', id);
     
     const { data, error } = await supabase
-      .rpc('archive_sandbox_item', { item_id: id });
+      .schema('arpet')
+      .from('sandbox_items')
+      .update({
+        status: 'archived',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
     
     if (error) {
-      console.error('❌ Archive RPC error:', error);
+      console.error('❌ Archive error:', error);
       throw error;
     }
     
-    if (!data) {
-      const { data: refetched, error: refetchError } = await supabase
-        .from('sandbox_items')
-        .select('*')
-        .eq('id', id)
-        .single();
-      
-      if (refetchError) throw refetchError;
-      return { data: refetched, error: null };
-    }
-    
-    console.log('✅ Item archived:', data);
+    console.log('✅ Item archived:', data.id);
     return { data, error: null };
   } catch (error) {
     console.error('archiveSandboxItem error:', error);
@@ -355,6 +348,7 @@ export async function deleteSandboxItem(
     console.log('🗑️ Deleting sandbox item:', id);
     
     const { error } = await supabase
+      .schema('arpet')
       .from('sandbox_items')
       .delete()
       .eq('id', id);
@@ -386,6 +380,7 @@ export async function addMessageToSandbox(
 ): Promise<ServiceResult<SandboxItem>> {
   try {
     const { data: current, error: fetchError } = await supabase
+      .schema('arpet')
       .from('sandbox_items')
       .select('content')
       .eq('id', id)
@@ -401,6 +396,7 @@ export async function addMessageToSandbox(
     };
     
     const { data, error } = await supabase
+      .schema('arpet')
       .from('sandbox_items')
       .update({
         content: {

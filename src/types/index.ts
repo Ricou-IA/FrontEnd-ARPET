@@ -1,7 +1,7 @@
 // ============================================================
-// ARPET - Types unifiés v2.0
-// Version: 2.0.0 - Fusion types existants + support qa_memory/vote
-// Date: 2025-01-XX
+// ARPET - Types unifiés v3.0
+// Version: 3.0.0 - Migration schémas DB (vertical → app)
+// Date: 2025-12-11
 // ============================================================
 
 // ============================================
@@ -14,7 +14,7 @@ export interface User {
   avatar_url?: string;
   role?: string;
   org_id?: string;
-  vertical_id?: string;
+  app_id?: string;
 }
 
 export interface Profile {
@@ -24,7 +24,7 @@ export interface Profile {
   business_role: string;
   app_role: string;
   org_id: string;
-  vertical_id: string;
+  app_id: string;
   avatar_url?: string;
   bio?: string;
   created_at: string;
@@ -145,7 +145,7 @@ export interface LibrarianResponse {
   embedding_model: string;
   prompt_used: string;
   prompt_resolution: string;
-  vertical_id: string | null;
+  app_id: string | null;
   can_vote: boolean;
   vote_context?: VoteContext;
   error?: string;
@@ -163,7 +163,7 @@ export interface QAMemory {
   trust_score: number;
   usage_count: number;
   authority_label: AuthorityLabel;
-  target_verticals?: string[];
+  target_apps?: string[];
   target_projects?: string[];
   validators_ids?: string[];
   created_by?: string;
@@ -240,7 +240,7 @@ export interface SandboxContent {
 /** Sandbox Item complet (depuis Supabase) */
 export interface SandboxItem {
   id: string;
-  vertical_id: string;
+  app_id: string;
   org_id: string;
   user_id: string;
   project_id: string | null;

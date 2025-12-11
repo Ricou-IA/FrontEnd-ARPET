@@ -1,7 +1,7 @@
 // ============================================================
 // ARPET - Vote Service
-// Version: 1.0.1 - Fix: qa_memory créée au niveau Organisation
-// Date: 2025-01-XX
+// Version: 2.0.0 - Migration vers schémas dédiés + fix RPC args
+// Date: 2025-12-11
 // ============================================================
 
 import { supabase } from '@/lib/supabase';
@@ -16,8 +16,19 @@ interface CreateQAMemoryParams {
   answer_text: string;
   source_document_ids?: string[];
   org_id: string;
-  // Note: target_verticals retiré - qa_memory toujours au niveau org
   target_projects?: string[];
+}
+
+// ============================================================
+// HELPER: Récupérer l'utilisateur courant
+// ============================================================
+
+async function getCurrentUserId(): Promise<string> {
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) {
+    throw new Error('User not authenticated');
+  }
+  return user.id;
 }
 
 // ============================================================
@@ -30,8 +41,11 @@ interface CreateQAMemoryParams {
  */
 export async function voteUp(qaId: string): Promise<VoteResult> {
   try {
+    const userId = await getCurrentUserId();
+    
     const { data, error } = await supabase.rpc('vote_for_answer', {
-      p_row_id: qaId
+      p_row_id: qaId,
+      p_user_id: userId
     });
 
     if (error) {
@@ -75,8 +89,11 @@ export async function voteUp(qaId: string): Promise<VoteResult> {
  */
 export async function voteDown(qaId: string): Promise<VoteResult> {
   try {
+    const userId = await getCurrentUserId();
+    
     const { data, error } = await supabase.rpc('invalidate_answer', {
-      p_row_id: qaId
+      p_row_id: qaId,
+      p_user_id: userId
     });
 
     if (error) {
@@ -119,16 +136,12 @@ export async function voteDown(qaId: string): Promise<VoteResult> {
 
 /**
  * Crée une nouvelle qa_memory à partir d'une réponse validée
- * IMPORTANT: Toujours créée au niveau ORGANISATION (pas Verticale)
- * Car l'utilisateur valide pour son org, pas pour toute la verticale
+ * IMPORTANT: Toujours créée au niveau ORGANISATION (pas App)
+ * Car l'utilisateur valide pour son org, pas pour toute l'app
  */
 export async function createQAMemory(params: CreateQAMemoryParams): Promise<{ id: string | null; error: string | null }> {
   try {
-    // Récupérer l'utilisateur courant
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      return { id: null, error: 'Utilisateur non authentifié' };
-    }
+    const userId = await getCurrentUserId();
 
     // Générer l'embedding pour la question (optionnel, peut être fait async)
     let embedding = null;
@@ -146,14 +159,15 @@ export async function createQAMemory(params: CreateQAMemoryParams): Promise<{ id
 
     // Insérer la qa_memory au niveau ORGANISATION uniquement
     const { data, error } = await supabase
+      .schema('rag')
       .from('qa_memory')
       .insert({
         question_text: params.question_text,
         answer_text: params.answer_text,
         embedding: embedding,
-        // NIVEAU ORGANISATION - pas de target_verticals
+        // NIVEAU ORGANISATION - pas de target_apps
         org_id: params.org_id,
-        target_verticals: null,  // Explicitement null - pas au niveau verticale
+        target_apps: null,  // Explicitement null - pas au niveau app
         target_projects: params.target_projects || null,
         source_document_ids: params.source_document_ids || null,
         // Scores initiaux
@@ -161,8 +175,8 @@ export async function createQAMemory(params: CreateQAMemoryParams): Promise<{ id
         usage_count: 0,
         authority_label: 'user',
         // Audit
-        created_by: user.id,
-        validators_ids: [user.id]
+        created_by: userId,
+        validators_ids: [userId]
       })
       .select('id')
       .single();
@@ -187,14 +201,10 @@ export async function createQAMemory(params: CreateQAMemoryParams): Promise<{ id
 /**
  * Vote positif sur une nouvelle réponse qui n'a pas encore de qa_memory
  * Crée la qa_memory au niveau ORGANISATION puis enregistre le vote
- * 
- * Note: targetVerticals est ignoré intentionnellement
- * La qa_memory est TOUJOURS créée au niveau org pour respecter les droits d'écriture
  */
 export async function voteUpNewAnswer(
   voteContext: VoteContext, 
   orgId: string, 
-  _targetVerticals?: string[],  // Préfixé _ car intentionnellement ignoré
   targetProjects?: string[]
 ): Promise<VoteResult & { qa_id?: string }> {
   try {
@@ -204,7 +214,6 @@ export async function voteUpNewAnswer(
       answer_text: voteContext.answer,
       source_document_ids: voteContext.source_ids,
       org_id: orgId,
-      // target_verticals volontairement omis - toujours au niveau org
       target_projects: targetProjects
     });
 
@@ -242,10 +251,10 @@ export async function voteUpNewAnswer(
  */
 export async function hasUserVoted(qaId: string): Promise<boolean> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return false;
+    const userId = await getCurrentUserId();
 
     const { data, error } = await supabase
+      .schema('rag')
       .from('qa_memory')
       .select('validators_ids')
       .eq('id', qaId)
@@ -254,7 +263,7 @@ export async function hasUserVoted(qaId: string): Promise<boolean> {
     if (error || !data) return false;
 
     const validators = data.validators_ids as string[] || [];
-    return validators.includes(user.id);
+    return validators.includes(userId);
   } catch {
     return false;
   }

@@ -1,7 +1,7 @@
 // ============================================================
-// ARPET - Hook useSandbox (simplifié)
-// Version: 3.0.0 - Only useSandboxItem for Editor
-// Date: 2025-12-04
+// ARPET - Hook useSandbox
+// Version: 4.0.0 - Compatible migration schémas
+// Date: 2025-12-11
 // ============================================================
 
 import { useCallback } from 'react';

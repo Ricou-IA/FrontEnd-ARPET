@@ -1,6 +1,7 @@
 // ============================================================
 // ARPET - useAuth Hook
-// Version: 3.0.0 - Init hors React pour éviter problèmes StrictMode
+// Version: 4.0.0 - Compatible migration schémas
+// Date: 2025-12-11
 // ============================================================
 
 import { useCallback, useSyncExternalStore } from 'react'

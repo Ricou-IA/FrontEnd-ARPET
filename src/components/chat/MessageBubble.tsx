@@ -1,7 +1,7 @@
 // ============================================================
 // ARPET - MessageBubble Component
-// Version: 3.0.0 - UX améliorée pour le vote et l'ancrage
-// Date: 2025-12-05
+// Version: 4.0.0 - Compatible migration schémas
+// Date: 2025-12-11
 // ============================================================
 
 import { useState, useCallback } from 'react'
@@ -102,8 +102,7 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
         // Créer nouvelle qa_memory + vote
         const result = await voteService.voteUpNewAnswer(
           message.vote_context,
-          profile.org_id,
-          profile.vertical_id ? [profile.vertical_id] : undefined
+          profile.org_id
         )
 
         if (result.success) {

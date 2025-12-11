@@ -1,6 +1,7 @@
 // ============================================================
 // ARPET - Supabase Client
-// Version: 3.1.0 - Token depuis localStorage (évite getSession qui bloque)
+// Version: 4.1.0 - Fix ALT+TAB bug (fetch direct pour profile)
+// Date: 2025-12-11
 // ============================================================
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
@@ -32,7 +33,7 @@ function getSupabaseClient(): SupabaseClient {
 export const supabase = getSupabaseClient()
 
 // ============================================================
-// HELPERS
+// HELPERS - Fetch direct (évite les bugs ALT+TAB)
 // ============================================================
 
 /**
@@ -52,11 +53,14 @@ function getAuthToken(): string | null {
 
 /**
  * Récupère le profil utilisateur via fetch direct
+ * Table: core.profiles
+ * Note: Utilise fetch direct pour éviter les problèmes de re-render sur ALT+TAB
  */
 export async function getProfile(userId: string) {
   try {
     const token = getAuthToken()
     
+    // Utiliser l'API REST avec le header Accept-Profile pour cibler le schéma
     const response = await fetch(
       `${supabaseUrl}/rest/v1/profiles?id=eq.${userId}&select=*`,
       {
@@ -64,6 +68,7 @@ export async function getProfile(userId: string) {
           'apikey': supabaseAnonKey,
           'Authorization': `Bearer ${token || supabaseAnonKey}`,
           'Content-Type': 'application/json',
+          'Accept-Profile': 'core',  // ← Schéma cible
         },
       }
     )
@@ -82,7 +87,8 @@ export async function getProfile(userId: string) {
 }
 
 /**
- * Récupère les projets de l'organisation
+ * Récupère les projets de l'organisation via fetch direct
+ * Table: core.projects
  */
 export async function getUserProjects(orgId: string) {
   try {
@@ -95,6 +101,7 @@ export async function getUserProjects(orgId: string) {
           'apikey': supabaseAnonKey,
           'Authorization': `Bearer ${token || supabaseAnonKey}`,
           'Content-Type': 'application/json',
+          'Accept-Profile': 'core',  // ← Schéma cible
         },
       }
     )
@@ -113,6 +120,7 @@ export async function getUserProjects(orgId: string) {
 
 /**
  * Récupère les projets via project_members
+ * Tables: core.project_members, core.projects
  */
 export async function getProjectsForUser(userId: string) {
   try {
@@ -125,6 +133,7 @@ export async function getProjectsForUser(userId: string) {
           'apikey': supabaseAnonKey,
           'Authorization': `Bearer ${token || supabaseAnonKey}`,
           'Content-Type': 'application/json',
+          'Accept-Profile': 'core',  // ← Schéma cible
         },
       }
     )
