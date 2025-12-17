@@ -1,6 +1,6 @@
 // ============================================================
 // ARPET - ChatArea Component
-// Version: 3.0.0 - Quick Wins: Auto-scroll, Reset, Theme toggle, RAG badge
+// Version: 3.1.0 - Fix auto-scroll jusqu'en bas du ChatInput
 // Date: 2025-12-17
 // ============================================================
 
@@ -38,10 +38,10 @@ export function ChatArea() {
     setIsAgentTyping
   } = useAppStore()
 
-  // ✅ QUICK WIN: Ref pour auto-scroll
+  // Ref pour auto-scroll - doit pointer APRÈS le ChatInput
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // ✅ QUICK WIN: État pour le modal de reset
+  // État pour le modal de reset
   const [isResetModalOpen, setIsResetModalOpen] = useState(false)
 
   // Date formatée
@@ -61,7 +61,7 @@ export function ChatArea() {
   // Prénom de l'utilisateur
   const firstName = profile?.full_name?.split(' ')[0] || 'vous'
 
-  // ✅ QUICK WIN: Auto-scroll vers le bas quand nouveaux messages
+  // Auto-scroll vers le bas quand nouveaux messages
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ 
@@ -71,7 +71,7 @@ export function ChatArea() {
     }
   }, [messages, isAgentTyping])
 
-  // ✅ QUICK WIN: Handler pour reset conversation
+  // Handler pour reset conversation
   const handleResetConversation = () => {
     clearMessages()
     setIsResetModalOpen(false)
@@ -160,7 +160,7 @@ export function ChatArea() {
         prompt_used: data?.prompt_used,
         prompt_resolution: data?.prompt_resolution,
         
-        // ✅ QUICK WIN: Metadata RAG mode
+        // Metadata RAG mode
         generation_mode: data?.generation_mode,
         cache_status: data?.cache_status,
         
@@ -240,7 +240,7 @@ export function ChatArea() {
   return (
     <div className="flex-1 overflow-y-auto w-full bg-stone-50 dark:bg-stone-950 transition-colors">
       
-      {/* ✅ QUICK WIN: Header avec actions */}
+      {/* Header avec actions */}
       <div className="sticky top-0 z-10 bg-stone-50/80 dark:bg-stone-950/80 backdrop-blur-sm border-b border-stone-100 dark:border-stone-800">
         <div className="w-full px-[10%] xl:px-[15%] py-2">
           <div className="max-w-3xl mx-auto sm:mx-0 flex items-center justify-between">
@@ -318,18 +318,18 @@ export function ChatArea() {
             </div>
           )}
 
-          {/* ✅ QUICK WIN: Ref pour auto-scroll */}
-          <div ref={messagesEndRef} />
-
           {/* Input */}
           <ChatInput
             onSendMessage={handleSendMessage}
             disabled={isAgentTyping}
           />
+
+          {/* ✅ FIX: Ref pour auto-scroll - APRÈS le ChatInput avec padding */}
+          <div ref={messagesEndRef} className="h-8" />
         </div>
       </div>
 
-      {/* ✅ QUICK WIN: Modal de reset */}
+      {/* Modal de reset */}
       <ResetConversationModal
         isOpen={isResetModalOpen}
         onClose={() => setIsResetModalOpen(false)}
@@ -340,7 +340,7 @@ export function ChatArea() {
   )
 }
 
-// Helper pour générer un titre
+// Helper pour générer un titre à partir du contenu
 function generateTitleFromContent(content: string): string {
   const words = content.split(' ').slice(0, 5).join(' ')
   if (words.length > 40) {
