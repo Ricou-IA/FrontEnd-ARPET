@@ -1,10 +1,10 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  darkMode: 'class',  // ✅ AJOUTÉ POUR LE DARK MODE
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  darkMode: 'class', // ✅ Activation du dark mode
   theme: {
     extend: {
       fontFamily: {
@@ -17,6 +17,16 @@ export default {
           'bg': '#FAFAF9',
           'sidebar': '#F5F5F4',
           'profile': '#9B2C2C',
+        },
+        // Couleurs Dark Mode
+        'dark': {
+          'bg': '#0f172a',        // Fond principal (slate-900)
+          'surface': '#1e293b',   // Fond cartes/sidebar (slate-800)
+          'elevated': '#334155',  // Fond élevé (slate-700)
+          'border': '#475569',    // Bordures (slate-600)
+          'text': '#e2e8f0',      // Texte principal (slate-200)
+          'muted': '#94a3b8',     // Texte secondaire (slate-400)
+          'input': '#1e293b',     // Fond input (slate-800)
         }
       },
       animation: {
