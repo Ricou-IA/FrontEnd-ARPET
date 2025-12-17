@@ -1,6 +1,6 @@
 // ============================================================
 // ARPET - Main App Component with Routing
-// Version: 2.0.0
+// Version: 2.1.0 - Quick Win: ThemeProvider pour dark mode
 // ============================================================
 
 import { useEffect, useState } from 'react'
@@ -10,6 +10,7 @@ import { getUserProjects } from './lib/supabase'
 import { LoginPage, ForgotPasswordPage, ResetPasswordPage } from './components/auth'
 import { Sidebar } from './components/layout/Sidebar'
 import { MainContent } from './components/layout/MainContent'
+import { ThemeProvider } from './components/theme/ThemeProvider'
 import type { Project } from './types'
 
 // ============================================================
@@ -18,13 +19,13 @@ import type { Project } from './types'
 
 function LoadingScreen() {
   return (
-    <div className="h-screen bg-[#FAFAF9] flex items-center justify-center">
+    <div className="h-screen bg-[#FAFAF9] dark:bg-stone-950 flex items-center justify-center">
       <div className="text-center">
-        <h1 className="font-brand text-4xl text-gray-900 mb-4">Arpet.</h1>
+        <h1 className="font-brand text-4xl text-gray-900 dark:text-gray-100 mb-4">Arpet.</h1>
         <div className="flex gap-1 justify-center">
-          <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-          <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-          <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          <span className="w-2 h-2 bg-gray-300 dark:bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+          <span className="w-2 h-2 bg-gray-300 dark:bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+          <span className="w-2 h-2 bg-gray-300 dark:bg-gray-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
         </div>
       </div>
     </div>
@@ -104,7 +105,7 @@ function Dashboard() {
   }, [profile?.org_id])
 
   return (
-    <div className="h-screen flex overflow-hidden text-stone-800 bg-[#FAFAF9]">
+    <div className="h-screen flex overflow-hidden text-stone-800 dark:text-stone-200 bg-[#FAFAF9] dark:bg-stone-950">
       {/* Sidebar */}
       <Sidebar projects={projects} />
 
@@ -113,9 +114,9 @@ function Dashboard() {
 
       {/* Loading overlay pour les projets */}
       {projectsLoading && (
-        <div className="fixed inset-0 bg-black/10 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-4 shadow-lg">
-            <p className="text-sm text-stone-600">Chargement des chantiers...</p>
+        <div className="fixed inset-0 bg-black/10 dark:bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-stone-900 rounded-lg p-4 shadow-lg">
+            <p className="text-sm text-stone-600 dark:text-stone-400">Chargement des chantiers...</p>
           </div>
         </div>
       )}
@@ -129,56 +130,58 @@ function Dashboard() {
 
 function App() {
   return (
-    <BrowserRouter
-      future={{
-        v7_startTransition: true,
-        v7_relativeSplatPath: true,
-      }}
-    >
-      <Routes>
-        {/* ================================ */}
-        {/* Routes publiques (auth)         */}
-        {/* ================================ */}
-        <Route
-          path="/login"
-          element={
-            <PublicRoute>
-              <LoginPage />
-            </PublicRoute>
-          }
-        />
-        <Route
-          path="/forgot-password"
-          element={
-            <PublicRoute>
-              <ForgotPasswordPage />
-            </PublicRoute>
-          }
-        />
-        {/* Reset password : accessible même connecté (flow Supabase) */}
-        <Route
-          path="/reset-password"
-          element={<ResetPasswordPage />}
-        />
+    <ThemeProvider defaultTheme="light">
+      <BrowserRouter
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <Routes>
+          {/* ================================ */}
+          {/* Routes publiques (auth)         */}
+          {/* ================================ */}
+          <Route
+            path="/login"
+            element={
+              <PublicRoute>
+                <LoginPage />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/forgot-password"
+            element={
+              <PublicRoute>
+                <ForgotPasswordPage />
+              </PublicRoute>
+            }
+          />
+          {/* Reset password : accessible même connecté (flow Supabase) */}
+          <Route
+            path="/reset-password"
+            element={<ResetPasswordPage />}
+          />
 
-        {/* ================================ */}
-        {/* Routes protégées (app)          */}
-        {/* ================================ */}
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
+          {/* ================================ */}
+          {/* Routes protégées (app)          */}
+          {/* ================================ */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
 
-        {/* ================================ */}
-        {/* Redirect par défaut             */}
-        {/* ================================ */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+          {/* ================================ */}
+          {/* Redirect par défaut             */}
+          {/* ================================ */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </ThemeProvider>
   )
 }
 

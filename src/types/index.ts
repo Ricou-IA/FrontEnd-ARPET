@@ -1,7 +1,7 @@
 // ============================================================
 // ARPET - Types unifiés v3.0
-// Version: 3.0.0 - Migration schémas DB (vertical → app)
-// Date: 2025-12-11
+// Version: 3.1.0 - Ajout RAG Badge metadata
+// Date: 2025-12-17
 // ============================================================
 
 // ============================================
@@ -118,6 +118,10 @@ export interface Message {
   processing_time_ms?: number;
   prompt_used?: string;
   prompt_resolution?: string;
+
+  // ✅ QUICK WIN: RAG Badge metadata
+  generation_mode?: 'chunks' | 'gemini' | 'hybrid';
+  cache_status?: 'hit' | 'miss' | 'none';
 
   // Système de vote (v2)
   can_vote?: boolean;

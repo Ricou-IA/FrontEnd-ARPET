@@ -1,13 +1,17 @@
 // ============================================================
 // ARPET - ChatArea Component
-// Version: 2.1.0 - Fix: Ajout mapping vote_context + can_vote
-// Date: 2025-12-05
+// Version: 3.0.0 - Quick Wins: Auto-scroll, Reset, Theme toggle, RAG badge
+// Date: 2025-12-17
 // ============================================================
 
+import { useEffect, useRef, useState } from 'react'
+import { RefreshCw } from 'lucide-react'
 import { useAppStore } from '../../stores/appStore'
 import { useAuth } from '../../hooks/useAuth'
 import { MessageBubble } from './MessageBubble'
 import { ChatInput } from './ChatInput'
+import { ResetConversationModal } from './ResetConversationModal'
+import { ThemeToggle } from '../theme/ThemeProvider'
 import { createSandboxItem } from '@/services/sandbox.service'
 import { createEmptySandboxContent } from '@/types'
 import { supabase } from '../../lib/supabase'
@@ -27,11 +31,18 @@ export function ChatArea() {
   const {
     messages,
     addMessage,
+    clearMessages,
     setMessageAnchored,
     activeProject,
     isAgentTyping,
     setIsAgentTyping
   } = useAppStore()
+
+  // ✅ QUICK WIN: Ref pour auto-scroll
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // ✅ QUICK WIN: État pour le modal de reset
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false)
 
   // Date formatée
   const today = new Date()
@@ -41,21 +52,36 @@ export function ChatArea() {
     month: 'long',
     year: 'numeric'
   })
-  // Première lettre en majuscule
   const capitalizedDate = formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1)
 
-  // Anecdote du jour (basée sur le jour)
+  // Anecdote du jour
   const anecdoteIndex = today.getDate() % anecdotes.length
   const anecdote = anecdotes[anecdoteIndex]
 
   // Prénom de l'utilisateur
   const firstName = profile?.full_name?.split(' ')[0] || 'vous'
 
+  // ✅ QUICK WIN: Auto-scroll vers le bas quand nouveaux messages
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'end'
+      })
+    }
+  }, [messages, isAgentTyping])
+
+  // ✅ QUICK WIN: Handler pour reset conversation
+  const handleResetConversation = () => {
+    clearMessages()
+    setIsResetModalOpen(false)
+    console.log('[ChatArea] Conversation réinitialisée')
+  }
+
   // Envoyer un message
   const handleSendMessage = async (content: string, _files?: File[]) => {
     if (!content.trim()) return
 
-    // Ajouter le message utilisateur
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -64,17 +90,14 @@ export function ChatArea() {
     }
     addMessage(userMessage)
 
-    // Afficher l'indicateur de frappe
     setIsAgentTyping(true)
 
     try {
-      // Récupérer le user_id directement depuis la session Supabase (plus fiable)
       const { data: { session } } = await supabase.auth.getSession()
       const userId = session?.user?.id || null
       
       console.log('[ChatArea] User ID:', userId)
       
-      // Appeler la Edge Function 'baikal-brain'
       const { data, error } = await supabase.functions.invoke('baikal-brain', {
         body: {
           query: content,
@@ -99,7 +122,6 @@ export function ChatArea() {
 
       console.log('[ChatArea] Réponse Edge Function:', data)
 
-      // Traiter la réponse
       let responseContent = ''
       if (data) {
         if (data.response) {
@@ -119,9 +141,6 @@ export function ChatArea() {
         }
       }
 
-      // ================================================================
-      // FIX v2.1: Mapping complet incluant vote_context et can_vote
-      // ================================================================
       const assistantMessage: Message = {
         id: crypto.randomUUID(),
         role: 'assistant',
@@ -134,15 +153,19 @@ export function ChatArea() {
         agent_source: data?.agent_source,
         sources: data?.sources,
         
-        // Nouvelles metadata v2
+        // Metadata v2
         documents_found: data?.documents_found,
         qa_memory_found: data?.qa_memory_found,
         processing_time_ms: data?.processing_time_ms,
         prompt_used: data?.prompt_used,
         prompt_resolution: data?.prompt_resolution,
         
-        // ✅ FIX: Ajout du système de vote
-        can_vote: data?.can_vote ?? true,  // Par défaut true si non spécifié
+        // ✅ QUICK WIN: Metadata RAG mode
+        generation_mode: data?.generation_mode,
+        cache_status: data?.cache_status,
+        
+        // Système de vote
+        can_vote: data?.can_vote ?? true,
         vote_context: data?.vote_context || {
           question: content,
           answer: responseContent,
@@ -172,13 +195,11 @@ export function ChatArea() {
 
   // Ancrer un message dans le bac à sable
   const handleAnchorMessage = async (message: Message) => {
-    // Trouver la question correspondante
     const userQuestion = messages.find(
       m => m.role === 'user' && m.timestamp < message.timestamp
     )?.content || ''
 
     const title = generateTitleFromContent(message.content)
-
     const content = createEmptySandboxContent(title, userQuestion)
     
     if (userQuestion) {
@@ -211,22 +232,52 @@ export function ChatArea() {
     }
   }
 
-  // Callback quand un vote est complété
+  // Callback vote complété
   const handleVoteComplete = (message: Message, voteType: 'up' | 'down', qaId?: string) => {
     console.log('[ChatArea] Vote complété:', { messageId: message.id, voteType, qaId })
-    // Optionnel: mettre à jour l'état du message dans le store si nécessaire
   }
 
   return (
-    <div className="flex-1 overflow-y-auto w-full">
+    <div className="flex-1 overflow-y-auto w-full bg-stone-50 dark:bg-stone-950 transition-colors">
+      
+      {/* ✅ QUICK WIN: Header avec actions */}
+      <div className="sticky top-0 z-10 bg-stone-50/80 dark:bg-stone-950/80 backdrop-blur-sm border-b border-stone-100 dark:border-stone-800">
+        <div className="w-full px-[10%] xl:px-[15%] py-2">
+          <div className="max-w-3xl mx-auto sm:mx-0 flex items-center justify-between">
+            {/* Date */}
+            <p className="text-xs font-medium text-stone-400 dark:text-stone-500">
+              {capitalizedDate}
+            </p>
+            
+            {/* Actions */}
+            <div className="flex items-center gap-1">
+              {/* Theme Toggle */}
+              <ThemeToggle />
+              
+              {/* Reset Button */}
+              <button
+                onClick={() => setIsResetModalOpen(true)}
+                disabled={messages.length === 0}
+                className={`
+                  p-2 rounded-lg transition-all duration-200
+                  ${messages.length === 0 
+                    ? 'text-stone-300 dark:text-stone-700 cursor-not-allowed' 
+                    : 'text-stone-500 hover:text-stone-700 hover:bg-stone-100 dark:text-stone-400 dark:hover:text-stone-200 dark:hover:bg-stone-800'
+                  }
+                `}
+                title="Nouvelle conversation"
+              >
+                <RefreshCw className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Zone Anecdote */}
-      <div className="w-full px-[10%] xl:px-[15%] pt-10 pb-4">
-        <div className="w-full max-w-3xl border-l-4 border-stone-300 pl-6 py-1 mx-auto sm:mx-0">
-          <p className="uppercase tracking-wide text-xs font-black text-stone-600 mb-2">
-            {capitalizedDate}
-          </p>
-          <p className="italic text-stone-500 font-light text-xs leading-relaxed text-justify">
+      <div className="w-full px-[10%] xl:px-[15%] pt-6 pb-4">
+        <div className="w-full max-w-3xl border-l-4 border-stone-300 dark:border-stone-700 pl-6 py-1 mx-auto sm:mx-0">
+          <p className="italic text-stone-500 dark:text-stone-400 font-light text-xs leading-relaxed text-justify">
             "{anecdote}"
           </p>
         </div>
@@ -237,7 +288,7 @@ export function ChatArea() {
         <div className="max-w-3xl mx-auto sm:mx-0 space-y-8">
 
           {/* Salutation */}
-          <h2 className="font-serif text-5xl text-stone-800 mb-6 text-left tracking-tight">
+          <h2 className="font-serif text-5xl text-stone-800 dark:text-stone-100 mb-6 text-left tracking-tight">
             Bonjour {firstName},
           </h2>
 
@@ -254,18 +305,21 @@ export function ChatArea() {
           {/* Indicateur de frappe */}
           {isAgentTyping && (
             <div className="flex gap-4">
-              <div className="w-8 h-8 rounded-full bg-stone-800 flex items-center justify-center text-white font-serif italic text-sm flex-shrink-0 mt-1">
+              <div className="w-8 h-8 rounded-full bg-stone-800 dark:bg-stone-200 flex items-center justify-center text-white dark:text-stone-800 font-serif italic text-sm flex-shrink-0 mt-1">
                 A
               </div>
-              <div className="bg-white border border-stone-100 p-4 rounded-r-xl rounded-bl-xl shadow-sm">
+              <div className="bg-white dark:bg-stone-900 border border-stone-100 dark:border-stone-800 p-4 rounded-r-xl rounded-bl-xl shadow-sm">
                 <div className="flex gap-1">
-                  <span className="w-2 h-2 bg-stone-300 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-2 h-2 bg-stone-300 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-2 h-2 bg-stone-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  <span className="w-2 h-2 bg-stone-300 dark:bg-stone-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-2 h-2 bg-stone-300 dark:bg-stone-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-2 h-2 bg-stone-300 dark:bg-stone-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                 </div>
               </div>
             </div>
           )}
+
+          {/* ✅ QUICK WIN: Ref pour auto-scroll */}
+          <div ref={messagesEndRef} />
 
           {/* Input */}
           <ChatInput
@@ -274,11 +328,19 @@ export function ChatArea() {
           />
         </div>
       </div>
+
+      {/* ✅ QUICK WIN: Modal de reset */}
+      <ResetConversationModal
+        isOpen={isResetModalOpen}
+        onClose={() => setIsResetModalOpen(false)}
+        onConfirm={handleResetConversation}
+        messageCount={messages.length}
+      />
     </div>
   )
 }
 
-// Helper pour générer un titre à partir du contenu
+// Helper pour générer un titre
 function generateTitleFromContent(content: string): string {
   const words = content.split(' ').slice(0, 5).join(' ')
   if (words.length > 40) {

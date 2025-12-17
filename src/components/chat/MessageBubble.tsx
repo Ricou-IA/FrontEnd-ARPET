@@ -1,7 +1,7 @@
 // ============================================================
 // ARPET - MessageBubble Component
-// Version: 4.0.0 - Compatible migration schémas
-// Date: 2025-12-11
+// Version: 5.0.0 - Quick Wins: RagBadge + Dark mode support
+// Date: 2025-12-17
 // ============================================================
 
 import { useState, useCallback } from 'react'
@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import type { Message, MessageSource } from '../../types'
 import { getAuthorityBadge } from '../../types'
+import { RagBadge } from './RagBadge'
 import * as voteService from '../../services/vote.service'
 import { useAuth } from '../../hooks/useAuth'
 
@@ -41,7 +42,7 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
     return (
       <div className="flex gap-4 justify-end">
         <div className="max-w-2xl">
-          <div className="text-sm text-stone-700 leading-relaxed bg-stone-100 p-4 rounded-l-xl rounded-br-xl">
+          <div className="text-sm text-stone-700 dark:text-stone-200 leading-relaxed bg-stone-100 dark:bg-stone-800 p-4 rounded-l-xl rounded-br-xl">
             <p className="whitespace-pre-wrap">{message.content}</p>
           </div>
         </div>
@@ -165,12 +166,12 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
 
     if (knowledge_type === 'expert_validated') {
       return (
-        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-amber-100">
-          <span className="bg-amber-50 text-amber-700 border border-amber-200 text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-amber-100 dark:border-amber-900/30">
+          <span className="bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
             ⭐ Réponse Expert
           </span>
           {localValidationCount > 0 && (
-            <span className="text-[10px] text-stone-400 font-medium">
+            <span className="text-[10px] text-stone-400 dark:text-stone-500 font-medium">
               Validée par {localValidationCount} expert{localValidationCount > 1 ? 's' : ''}
             </span>
           )}
@@ -180,13 +181,13 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
 
     if (knowledge_type === 'team_validated') {
       return (
-        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-green-100">
-          <span className="bg-green-50 text-green-700 border border-green-200 text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-green-100 dark:border-green-900/30">
+          <span className="bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
             <Check className="w-2.5 h-2.5" />
             Validée par l'équipe
           </span>
           {localValidationCount > 0 && (
-            <span className="text-[10px] text-stone-400 font-medium">
+            <span className="text-[10px] text-stone-400 dark:text-stone-500 font-medium">
               {localValidationCount} validation{localValidationCount > 1 ? 's' : ''}
             </span>
           )}
@@ -196,13 +197,13 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
 
     if (knowledge_type === 'shared') {
       return (
-        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-stone-100">
-          <span className="bg-green-50 text-green-700 border border-green-100 text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-stone-100 dark:border-stone-800">
+          <span className="bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-100 dark:border-green-800 text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
             <Zap className="w-2.5 h-2.5" />
             Savoir Partagé
           </span>
           {localValidationCount > 0 && (
-            <span className="text-[10px] text-stone-400 font-medium">
+            <span className="text-[10px] text-stone-400 dark:text-stone-500 font-medium">
               Validé par {localValidationCount} conducteur{localValidationCount > 1 ? 's' : ''}
             </span>
           )}
@@ -212,8 +213,8 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
 
     if (knowledge_type === 'project') {
       return (
-        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-blue-100">
-          <span className="bg-blue-50 text-blue-600 border border-blue-100 text-[10px] px-2 py-0.5 rounded-full font-bold">
+        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-blue-100 dark:border-blue-900/30">
+          <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
             🏗️ Document Chantier
           </span>
         </div>
@@ -222,8 +223,8 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
 
     if (knowledge_type === 'organization') {
       return (
-        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-purple-100">
-          <span className="bg-purple-50 text-purple-600 border border-purple-100 text-[10px] px-2 py-0.5 rounded-full font-bold">
+        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-purple-100 dark:border-purple-900/30">
+          <span className="bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 border border-purple-100 dark:border-purple-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
             🏢 Document Entreprise
           </span>
         </div>
@@ -233,11 +234,11 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
     // Nouvelle réponse - invitation à voter
     if (!knowledge_type || knowledge_type === 'none') {
       return (
-        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-blue-100">
-          <span className="bg-blue-50 text-blue-600 border border-blue-100 text-[10px] px-2 py-0.5 rounded-full font-bold">
+        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-blue-100 dark:border-blue-900/30">
+          <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
             ✨ Nouvelle réponse
           </span>
-          <span className="text-[10px] text-stone-400">
+          <span className="text-[10px] text-stone-400 dark:text-stone-500">
             Votez 👍 si cette réponse vous aide
           </span>
         </div>
@@ -252,8 +253,8 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
     if (!message.sources || message.sources.length === 0) return null
 
     return (
-      <div className="mt-3 pt-2 border-t border-stone-100">
-        <p className="text-[10px] text-stone-400 font-medium mb-1.5">Sources :</p>
+      <div className="mt-3 pt-2 border-t border-stone-100 dark:border-stone-800">
+        <p className="text-[10px] text-stone-400 dark:text-stone-500 font-medium mb-1.5">Sources :</p>
         <div className="flex flex-wrap gap-1.5">
           {message.sources.map((source, index) => (
             <SourceBadge key={source.id || index} source={source} />
@@ -269,20 +270,31 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
   return (
     <div className="flex gap-4 group">
       {/* Avatar Arpet */}
-      <div className="w-8 h-8 rounded-full bg-stone-800 flex items-center justify-center text-white font-serif italic text-sm flex-shrink-0 mt-1">
+      <div className="w-8 h-8 rounded-full bg-stone-800 dark:bg-stone-200 flex items-center justify-center text-white dark:text-stone-800 font-serif italic text-sm flex-shrink-0 mt-1">
         A
       </div>
 
       <div className="flex-1 max-w-2xl">
         {/* Bulle de réponse */}
-        <div className="text-sm text-stone-700 leading-relaxed bg-white border border-stone-100 p-4 rounded-r-xl rounded-bl-xl shadow-sm">
+        <div className="text-sm text-stone-700 dark:text-stone-200 leading-relaxed bg-white dark:bg-stone-900 border border-stone-100 dark:border-stone-800 p-4 rounded-r-xl rounded-bl-xl shadow-sm">
           
           {/* Header Knowledge Type */}
           {renderKnowledgeHeader()}
 
+          {/* ✅ QUICK WIN: Badge RAG Mode */}
+          {message.generation_mode && (
+            <RagBadge
+              generationMode={message.generation_mode}
+              cacheStatus={message.cache_status}
+              processingTimeMs={message.processing_time_ms}
+              documentsFound={message.documents_found}
+              className="mb-3"
+            />
+          )}
+
           {/* Contenu du message */}
           <div 
-            className="prose prose-sm prose-stone max-w-none"
+            className="prose prose-sm prose-stone dark:prose-invert max-w-none"
             dangerouslySetInnerHTML={{ __html: formatContent(message.content) }}
           />
 
@@ -291,12 +303,12 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
 
           {/* Erreur de vote */}
           {voteError && (
-            <div className="mt-3 flex items-center gap-1.5 text-xs text-red-500 bg-red-50 px-2 py-1.5 rounded">
+            <div className="mt-3 flex items-center gap-1.5 text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-2 py-1.5 rounded">
               <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
               <span>{voteError}</span>
               <button 
                 onClick={() => setVoteError(null)}
-                className="ml-auto text-red-400 hover:text-red-600"
+                className="ml-auto text-red-400 hover:text-red-600 dark:hover:text-red-300"
               >
                 ×
               </button>
@@ -313,8 +325,8 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
               onClick={handleAnchorClick}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                 isAnchored 
-                  ? 'bg-green-100 text-green-600 hover:bg-green-200' 
-                  : 'bg-stone-100 hover:bg-stone-200 text-stone-600'
+                  ? 'bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/60' 
+                  : 'bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300'
               }`}
               title={isAnchored ? 'Ouvrir dans le Bac à Sable' : 'Ancrer dans le Bac à Sable'}
             >
@@ -328,8 +340,8 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
               onClick={handleCopy}
               className={`p-1.5 rounded-full transition-all ${
                 copied 
-                  ? 'bg-green-100 text-green-600' 
-                  : 'hover:bg-stone-100 text-stone-400 hover:text-stone-600'
+                  ? 'bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400' 
+                  : 'hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300'
               }`}
               title={copied ? 'Copié !' : 'Copier'}
             >
@@ -349,10 +361,10 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
               disabled={isVoting || voteStatus !== 'none'}
               className={`p-1.5 rounded-full transition-all ${
                 voteStatus === 'up'
-                  ? 'bg-green-100 text-green-600'
+                  ? 'bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400'
                   : voteStatus !== 'none'
-                  ? 'text-stone-200 cursor-not-allowed'
-                  : 'hover:bg-green-50 hover:text-green-600 text-stone-400'
+                  ? 'text-stone-200 dark:text-stone-700 cursor-not-allowed'
+                  : 'hover:bg-green-50 dark:hover:bg-green-900/30 hover:text-green-600 dark:hover:text-green-400 text-stone-400 dark:text-stone-500'
               }`}
               title={
                 voteStatus === 'up' 
@@ -369,7 +381,7 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
             
             {/* Compteur */}
             <span className={`text-xs font-bold min-w-[20px] text-center ${
-              localValidationCount > 0 ? 'text-green-600' : 'text-stone-400'
+              localValidationCount > 0 ? 'text-green-600 dark:text-green-400' : 'text-stone-400 dark:text-stone-500'
             }`}>
               {localValidationCount}
             </span>
@@ -380,10 +392,10 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
               disabled={isVoting || voteStatus !== 'none'}
               className={`p-1.5 rounded-full transition-all ${
                 voteStatus === 'down'
-                  ? 'bg-red-100 text-red-500'
+                  ? 'bg-red-100 dark:bg-red-900/40 text-red-500 dark:text-red-400'
                   : voteStatus !== 'none'
-                  ? 'text-stone-200 cursor-not-allowed'
-                  : 'hover:bg-red-50 hover:text-red-500 text-stone-400'
+                  ? 'text-stone-200 dark:text-stone-700 cursor-not-allowed'
+                  : 'hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 text-stone-400 dark:text-stone-500'
               }`}
               title={
                 voteStatus === 'down' 
@@ -416,7 +428,7 @@ function SourceBadge({ source }: SourceBadgeProps) {
     return (
       <span 
         className={`text-[10px] px-2 py-0.5 rounded flex items-center gap-1 cursor-help ${
-          authorityBadge?.color || 'bg-green-50 text-green-600'
+          authorityBadge?.color || 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400'
         }`}
         title={source.content_preview || 'Réponse validée par la communauté'}
       >
@@ -435,7 +447,7 @@ function SourceBadge({ source }: SourceBadgeProps) {
   // Document classique
   return (
     <span 
-      className="text-[10px] bg-stone-100 text-stone-500 px-2 py-0.5 rounded cursor-help"
+      className="text-[10px] bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 px-2 py-0.5 rounded cursor-help"
       title={source.content_preview || 'Document source'}
     >
       <span className="truncate max-w-[150px] inline-block align-middle">
@@ -463,7 +475,7 @@ function formatContent(content: string): string {
   formatted = formatted.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>')
 
   // Code inline: `code`
-  formatted = formatted.replace(/`([^`]+)`/g, '<code class="bg-stone-100 px-1 py-0.5 rounded text-xs">$1</code>')
+  formatted = formatted.replace(/`([^`]+)`/g, '<code class="bg-stone-100 dark:bg-stone-800 px-1 py-0.5 rounded text-xs">$1</code>')
 
   // Listes à puces
   formatted = formatted.replace(/^- (.+)$/gm, '• $1')

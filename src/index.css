@@ -3,6 +3,38 @@
 @tailwind utilities;
 
 /* ============================================================
+   DARK MODE - Variables CSS
+   ============================================================ */
+
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #fafaf9;
+  --bg-tertiary: #f5f5f4;
+  --text-primary: #1c1917;
+  --text-secondary: #44403c;
+  --text-muted: #a8a29e;
+  --border-default: #e7e5e4;
+  --chat-user-bg: #f5f5f4;
+  --chat-assistant-bg: #ffffff;
+  --chat-input-bg: #ffffff;
+  --chat-input-border: #e7e5e4;
+}
+
+.dark {
+  --bg-primary: #0c0a09;
+  --bg-secondary: #1c1917;
+  --bg-tertiary: #292524;
+  --text-primary: #fafaf9;
+  --text-secondary: #e7e5e4;
+  --text-muted: #78716c;
+  --border-default: #44403c;
+  --chat-user-bg: #292524;
+  --chat-assistant-bg: #1c1917;
+  --chat-input-bg: #1c1917;
+  --chat-input-border: #44403c;
+}
+
+/* ============================================================
    ARPET - Global Styles
    Version: 2.1.0 - Ajout animation dialog
    ============================================================ */
@@ -11,29 +43,33 @@
 body {
   font-family: 'Inter', sans-serif;
   background-color: #FAFAF9;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.dark body {
+  background-color: #1c1917;
+  color: #fafaf9;
 }
 
 /* ============================================================
    TYPOGRAPHY - Font Classes
    ============================================================ */
 
-/* Font Branding (Bodoni Moda) - graisses renforcées pour meilleure lisibilité */
 .font-brand {
   font-family: 'Bodoni Moda', serif;
-  font-weight: 600; /* SemiBold par défaut */
+  font-weight: 600;
 }
 
 .font-brand-bold {
   font-family: 'Bodoni Moda', serif;
-  font-weight: 700; /* Bold */
+  font-weight: 700;
 }
 
 .font-brand-heavy {
   font-family: 'Bodoni Moda', serif;
-  font-weight: 800; /* ExtraBold */
+  font-weight: 800;
 }
 
-/* Font Serif (Instrument Serif) - pour les titres secondaires */
 .font-serif {
   font-family: 'Instrument Serif', serif;
 }
@@ -42,14 +78,12 @@ body {
    LOGIN PAGE - Styles spécifiques
    ============================================================ */
 
-/* Background pattern pour la page de login */
 .login-bg-pattern {
   background-color: #F3F4F6;
   background-image: radial-gradient(#E5E7EB 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
-/* Animation physique du fil à plomb */
 .plumb-bob-wrapper {
   transform-origin: top center;
   animation: physicsSway 4s ease-in-out infinite;
@@ -88,6 +122,14 @@ body {
   background: #D4D4D4;
 }
 
+.dark ::-webkit-scrollbar-thumb {
+  background: #57534e;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #78716c;
+}
+
 /* ============================================================
    WIDGET CARDS - Hover effects
    ============================================================ */
@@ -108,6 +150,8 @@ body {
 
 .chat-container {
   transition: border-color 0.2s, box-shadow 0.2s;
+  background-color: var(--chat-input-bg);
+  border-color: var(--chat-input-border);
 }
 
 .chat-container:focus-within {
@@ -141,7 +185,6 @@ body {
    ANIMATIONS
    ============================================================ */
 
-/* Animation for push to sandbox */
 @keyframes slideDownFade {
   from {
     opacity: 0;
@@ -161,7 +204,6 @@ body {
   animation: slideDownFade 0.4s ease-out forwards;
 }
 
-/* Fade in animation */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -175,7 +217,6 @@ body {
   animation: fadeIn 0.3s ease-out forwards;
 }
 
-/* Scale in animation (pour les dialogs) */
 @keyframes scaleIn {
   from {
     opacity: 0;
@@ -196,7 +237,6 @@ body {
    ============================================================ */
 
 @layer utilities {
-  /* Truncate multi-line text */
   .line-clamp-1 {
     display: -webkit-box;
     -webkit-line-clamp: 1;
