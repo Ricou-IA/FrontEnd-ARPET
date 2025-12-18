@@ -1,6 +1,6 @@
 // ============================================================
 // ARPET - Main App Component with Routing
-// Version: 3.0.0 - Ajout route /documents
+// Version: 3.1.0 - Intégration Split View Panel
 // Date: 2025-12-18
 // ============================================================
 
@@ -12,7 +12,9 @@ import { LoginPage, ForgotPasswordPage, ResetPasswordPage } from './components/a
 import { Sidebar } from './components/layout/Sidebar'
 import { MainContent } from './components/layout/MainContent'
 import { DocumentsPage } from './components/documents'
+import { SplitViewPanel } from './components/viewer'
 import { ThemeProvider } from './components/theme/ThemeProvider'
+import { useAppStore } from './stores/appStore'
 import type { Project } from './types'
 
 // ============================================================
@@ -79,7 +81,7 @@ function PublicRoute({ children }: PublicRouteProps) {
 }
 
 // ============================================================
-// DASHBOARD LAYOUT (avec Sidebar)
+// DASHBOARD LAYOUT (avec Sidebar + Split View)
 // ============================================================
 
 interface DashboardLayoutProps {
@@ -89,13 +91,23 @@ interface DashboardLayoutProps {
 }
 
 function DashboardLayout({ children, projects, projectsLoading }: DashboardLayoutProps) {
+  const { viewerOpen } = useAppStore()
+
   return (
     <div className="h-screen flex overflow-hidden text-stone-800 dark:text-stone-200 bg-[#FAFAF9] dark:bg-stone-950">
       {/* Sidebar */}
       <Sidebar projects={projects} />
 
-      {/* Contenu principal */}
-      {children}
+      {/* Contenu principal - se réduit quand le viewer est ouvert */}
+      <div className={`flex-1 flex overflow-hidden transition-all duration-300 ${viewerOpen ? 'mr-0' : ''}`}>
+        {/* Zone principale */}
+        <div className="flex-1 overflow-hidden">
+          {children}
+        </div>
+
+        {/* Split View Panel */}
+        {viewerOpen && <SplitViewPanel />}
+      </div>
 
       {/* Loading overlay pour les projets */}
       {projectsLoading && (

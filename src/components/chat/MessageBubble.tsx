@@ -1,19 +1,21 @@
 // ============================================================
 // ARPET - MessageBubble Component
-// Version: 5.0.0 - Quick Wins: RagBadge + Dark mode support
-// Date: 2025-12-17
+// Version: 5.2.0 - Utilisation source_file_id direct (plus de lookup chunk)
+// Date: 2025-12-18
 // ============================================================
 
 import { useState, useCallback } from 'react'
 import { 
   Bookmark, Copy, ThumbsUp, ThumbsDown, Zap, Check, 
-  AlertCircle, ExternalLink, CheckCircle, Loader2 
+  AlertCircle, ExternalLink, CheckCircle, Loader2, Eye 
 } from 'lucide-react'
-import type { Message, MessageSource } from '../../types'
+import type { Message, MessageSource, ViewerDocument } from '../../types'
 import { getAuthorityBadge } from '../../types'
 import { RagBadge } from './RagBadge'
 import * as voteService from '../../services/vote.service'
+import { getSourceFileById, getFileDownloadUrl } from '../../services/documents.service'
 import { useAuth } from '../../hooks/useAuth'
+import { useAppStore } from '../../stores/appStore'
 
 interface MessageBubbleProps {
   message: Message
@@ -24,6 +26,7 @@ interface MessageBubbleProps {
 
 export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComplete }: MessageBubbleProps) {
   const { profile } = useAuth()
+  const { openViewer } = useAppStore()
   
   // États locaux
   const [isVoting, setIsVoting] = useState(false)
@@ -75,7 +78,6 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
   const handleVoteUp = useCallback(async () => {
     if (isVoting || voteStatus !== 'none') return
     
-    // Vérifier qu'on peut voter
     if (!message.can_vote && !message.vote_context) {
       setVoteError('Vote non disponible pour ce message')
       return
@@ -85,11 +87,9 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
     setVoteError(null)
 
     try {
-      // Chercher si c'est une qa_memory existante
       const existingQaId = message.sources?.find(s => s.qa_id)?.qa_id
 
       if (existingQaId) {
-        // Vote sur qa_memory existante
         const result = await voteService.voteUp(existingQaId)
         
         if (result.success) {
@@ -100,7 +100,6 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
           setVoteError(result.message)
         }
       } else if (message.vote_context && profile?.org_id) {
-        // Créer nouvelle qa_memory + vote
         const result = await voteService.voteUpNewAnswer(
           message.vote_context,
           profile.org_id
@@ -145,7 +144,6 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
           setVoteError(result.message)
         }
       } else {
-        // Pour une nouvelle réponse, on ne peut pas voter négatif
         setVoteError('Seules les réponses validées peuvent être signalées')
       }
     } catch (err) {
@@ -160,7 +158,6 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
   // RENDER HELPERS
   // ================================================================
 
-  // Header selon knowledge_type
   const renderKnowledgeHeader = () => {
     const { knowledge_type } = message
 
@@ -231,7 +228,6 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
       )
     }
 
-    // Nouvelle réponse - invitation à voter
     if (!knowledge_type || knowledge_type === 'none') {
       return (
         <div className="flex items-center gap-2 mb-3 pb-2 border-b border-blue-100 dark:border-blue-900/30">
@@ -248,7 +244,6 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
     return null
   }
 
-  // Sources avec distinction document/qa_memory
   const renderSources = () => {
     if (!message.sources || message.sources.length === 0) return null
 
@@ -257,7 +252,11 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
         <p className="text-[10px] text-stone-400 dark:text-stone-500 font-medium mb-1.5">Sources :</p>
         <div className="flex flex-wrap gap-1.5">
           {message.sources.map((source, index) => (
-            <SourceBadge key={source.id || index} source={source} />
+            <SourceBadge 
+              key={source.id || index} 
+              source={source} 
+              onOpenViewer={openViewer}
+            />
           ))}
         </div>
       </div>
@@ -269,19 +268,15 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
   // ================================================================
   return (
     <div className="flex gap-4 group">
-      {/* Avatar Arpet */}
       <div className="w-8 h-8 rounded-full bg-stone-800 dark:bg-stone-200 flex items-center justify-center text-white dark:text-stone-800 font-serif italic text-sm flex-shrink-0 mt-1">
         A
       </div>
 
       <div className="flex-1 max-w-2xl">
-        {/* Bulle de réponse */}
         <div className="text-sm text-stone-700 dark:text-stone-200 leading-relaxed bg-white dark:bg-stone-900 border border-stone-100 dark:border-stone-800 p-4 rounded-r-xl rounded-bl-xl shadow-sm">
           
-          {/* Header Knowledge Type */}
           {renderKnowledgeHeader()}
 
-          {/* ✅ QUICK WIN: Badge RAG Mode */}
           {message.generation_mode && (
             <RagBadge
               generationMode={message.generation_mode}
@@ -292,16 +287,13 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
             />
           )}
 
-          {/* Contenu du message */}
           <div 
             className="prose prose-sm prose-stone dark:prose-invert max-w-none"
             dangerouslySetInnerHTML={{ __html: formatContent(message.content) }}
           />
 
-          {/* Sources */}
           {renderSources()}
 
-          {/* Erreur de vote */}
           {voteError && (
             <div className="mt-3 flex items-center gap-1.5 text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-2 py-1.5 rounded">
               <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
@@ -316,11 +308,8 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
           )}
         </div>
 
-        {/* Barre d'outils */}
         <div className="flex items-center justify-between mt-2">
-          {/* Actions gauche */}
           <div className="flex gap-2">
-            {/* Bouton Ancrer */}
             <button 
               onClick={handleAnchorClick}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
@@ -335,7 +324,6 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
               {isAnchored && <ExternalLink className="w-3 h-3 ml-0.5" />}
             </button>
             
-            {/* Bouton Copier */}
             <button 
               onClick={handleCopy}
               className={`p-1.5 rounded-full transition-all ${
@@ -353,9 +341,7 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
             </button>
           </div>
 
-          {/* Vote droite */}
           <div className="flex items-center gap-1">
-            {/* Vote positif */}
             <button 
               onClick={handleVoteUp}
               disabled={isVoting || voteStatus !== 'none'}
@@ -379,14 +365,12 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
               )}
             </button>
             
-            {/* Compteur */}
             <span className={`text-xs font-bold min-w-[20px] text-center ${
               localValidationCount > 0 ? 'text-green-600 dark:text-green-400' : 'text-stone-400 dark:text-stone-500'
             }`}>
               {localValidationCount}
             </span>
             
-            {/* Vote négatif */}
             <button 
               onClick={handleVoteDown}
               disabled={isVoting || voteStatus !== 'none'}
@@ -413,16 +397,77 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
 }
 
 // ============================================================
-// COMPOSANT SOURCE BADGE
+// COMPOSANT SOURCE BADGE (avec bouton Voir)
+// v5.2.0: Utilisation source_file_id direct
 // ============================================================
 
 interface SourceBadgeProps {
   source: MessageSource
+  onOpenViewer: (doc: ViewerDocument) => void
 }
 
-function SourceBadge({ source }: SourceBadgeProps) {
+function SourceBadge({ source, onOpenViewer }: SourceBadgeProps) {
+  const [isLoading, setIsLoading] = useState(false)
+  
   const isQAMemory = source.type === 'qa_memory'
   const authorityBadge = isQAMemory ? getAuthorityBadge(source.authority_label) : null
+  
+  // v5.2.0: Utiliser source_file_id directement (ID du fichier dans sources.files)
+  const sourceFileId = source.source_file_id
+  const isDocument = !isQAMemory && sourceFileId
+
+  // Handler pour ouvrir le document dans le Split View
+  const handleViewDocument = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    
+    if (isLoading || !sourceFileId) return
+
+    console.log('🔍 Opening document with source_file_id:', sourceFileId)
+    setIsLoading(true)
+    
+    try {
+      // v5.2.0: Récupérer directement le fichier par son ID (pas de lookup via chunk)
+      const { data: file, error: fileError } = await getSourceFileById(sourceFileId)
+      
+      if (fileError || !file) {
+        console.error('Could not find file:', sourceFileId, fileError)
+        return
+      }
+
+      console.log('📄 Found file:', file.original_filename)
+
+      if (!file.storage_path) {
+        console.error('File has no storage path:', file.id)
+        return
+      }
+
+      // Générer l'URL signée
+      const { data: url, error: urlError } = await getFileDownloadUrl(
+        file.storage_bucket,
+        file.storage_path
+      )
+
+      if (urlError || !url) {
+        console.error('Could not get signed URL:', urlError)
+        return
+      }
+
+      // Ouvrir le viewer
+      const viewerDoc: ViewerDocument = {
+        id: file.id,
+        filename: file.original_filename,
+        url: url,
+        mimeType: file.mime_type,
+        fileSize: file.file_size,
+      }
+
+      onOpenViewer(viewerDoc)
+    } catch (err) {
+      console.error('Error opening document:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   if (isQAMemory) {
     return (
@@ -444,17 +489,35 @@ function SourceBadge({ source }: SourceBadgeProps) {
     )
   }
 
-  // Document classique
+  // Document classique avec bouton Voir
+  const displayName = source.document_name || source.name || 'Document'
+  
   return (
     <span 
-      className="text-[10px] bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 px-2 py-0.5 rounded cursor-help"
+      className="text-[10px] bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 px-2 py-0.5 rounded flex items-center gap-1.5 group/source"
       title={source.content_preview || 'Document source'}
     >
-      <span className="truncate max-w-[150px] inline-block align-middle">
-        {source.document_name || source.name || 'Document'}
+      <span className="truncate max-w-[120px]">
+        {displayName}
       </span>
       {source.score !== undefined && (
-        <span className="opacity-60 ml-1">({Math.round(source.score * 100)}%)</span>
+        <span className="opacity-60">({Math.round(source.score * 100)}%)</span>
+      )}
+      
+      {/* Bouton Voir - uniquement si source_file_id existe */}
+      {isDocument && (
+        <button
+          onClick={handleViewDocument}
+          disabled={isLoading}
+          className="p-0.5 rounded hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-50"
+          title="Voir le document"
+        >
+          {isLoading ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : (
+            <Eye className="w-3 h-3" />
+          )}
+        </button>
       )}
     </span>
   )
@@ -467,27 +530,15 @@ function SourceBadge({ source }: SourceBadgeProps) {
 function formatContent(content: string): string {
   let formatted = content
 
-  // Bold: **text** ou __text__
   formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
   formatted = formatted.replace(/__(.+?)__/g, '<strong>$1</strong>')
-
-  // Italic: *text* ou _text_
   formatted = formatted.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>')
-
-  // Code inline: `code`
   formatted = formatted.replace(/`([^`]+)`/g, '<code class="bg-stone-100 dark:bg-stone-800 px-1 py-0.5 rounded text-xs">$1</code>')
-
-  // Listes à puces
   formatted = formatted.replace(/^- (.+)$/gm, '• $1')
-  
-  // Numérotation
   formatted = formatted.replace(/^(\d+)\. (.+)$/gm, '<span class="font-medium">$1.</span> $2')
-
-  // Convertir les retours à la ligne
   formatted = formatted.replace(/\n\n/g, '</p><p class="mt-3">')
   formatted = formatted.replace(/\n/g, '<br>')
 
-  // Envelopper dans un paragraphe
   if (!formatted.startsWith('<')) {
     formatted = `<p>${formatted}</p>`
   }

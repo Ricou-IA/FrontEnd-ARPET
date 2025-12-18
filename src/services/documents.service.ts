@@ -1,6 +1,6 @@
 // ============================================================
 // ARPET - Documents Service (Supabase)
-// Version: 1.0.0 - sources.files
+// Version: 1.4.0 - Ajout getSourceFileByChunkId pour Split View
 // Date: 2025-12-18
 // ============================================================
 
@@ -8,8 +8,9 @@ import { supabase } from '@/lib/supabase';
 import type { 
   SourceFile, 
   DocumentLayer, 
-  DocumentCategory,
-  PromotionStatus 
+  PromotionStatus,
+  Project,
+  DocumentCategoryConfig
 } from '@/types';
 
 // ============================================================
@@ -46,6 +47,55 @@ async function getCurrentProfile() {
 }
 
 // ============================================================
+// CATÉGORIES DOCUMENTAIRES
+// ============================================================
+
+/**
+ * Récupère les catégories de documents depuis config.document_categories
+ * Filtrées par app_id et layer
+ */
+export async function getDocumentCategories(
+  layer?: DocumentLayer
+): Promise<ServiceResult<DocumentCategoryConfig[]>> {
+  try {
+    const profile = await getCurrentProfile();
+    const appId = profile.app_id || 'arpet';
+
+    const query = supabase
+      .schema('config')
+      .from('document_categories')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .order('label', { ascending: true });
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    // Filtrer côté client car Supabase ne supporte pas bien les filtres sur arrays
+    const filtered = (data || []).filter(cat => {
+      // Vérifier target_apps
+      const appsMatch = cat.target_apps?.includes('all') || cat.target_apps?.includes(appId);
+      if (!appsMatch) return false;
+
+      // Vérifier target_layers si un layer est spécifié
+      if (layer) {
+        const layersMatch = cat.target_layers?.includes(layer);
+        if (!layersMatch) return false;
+      }
+
+      return true;
+    });
+
+    return { data: filtered, error: null };
+  } catch (error) {
+    console.error('getDocumentCategories error:', error);
+    return { data: null, error: error as Error };
+  }
+}
+
+// ============================================================
 // LECTURE - GET FILES
 // ============================================================
 
@@ -56,7 +106,7 @@ export async function getFilesByLayer(
   layer: DocumentLayer,
   options?: {
     projectId?: string;
-    category?: DocumentCategory;
+    categoryId?: string; // UUID de la catégorie
     limit?: number;
   }
 ): Promise<ServiceResult<SourceFile[]>> {
@@ -93,9 +143,9 @@ export async function getFilesByLayer(
         break;
     }
 
-    // Filtre catégorie optionnel
-    if (options?.category) {
-      query = query.contains('metadata', { category: options.category });
+    // Filtre catégorie optionnel (par UUID)
+    if (options?.categoryId) {
+      query = query.contains('metadata', { category: options.categoryId });
     }
 
     // Limite optionnelle
@@ -157,12 +207,81 @@ export async function getFileDownloadUrl(
 }
 
 // ============================================================
+// RÉCUPÉRATION FICHIER DEPUIS UN CHUNK RAG
+// ============================================================
+
+/**
+ * Récupère les infos d'un fichier source à partir d'un document_id (chunk dans rag.documents)
+ */
+export async function getSourceFileByChunkId(
+  chunkId: string | number
+): Promise<ServiceResult<SourceFile>> {
+  try {
+    // 1. Récupérer le source_file_id depuis le chunk
+    const { data: chunk, error: chunkError } = await supabase
+      .schema('rag')
+      .from('documents')
+      .select('source_file_id')
+      .eq('id', chunkId)
+      .single();
+
+    if (chunkError || !chunk?.source_file_id) {
+      console.log('Chunk not found or no source_file_id:', chunkId);
+      return { data: null, error: new Error('Source file not found') };
+    }
+
+    // 2. Récupérer le fichier source
+    const { data: file, error: fileError } = await supabase
+      .schema('sources')
+      .from('files')
+      .select('*')
+      .eq('id', chunk.source_file_id)
+      .single();
+
+    if (fileError || !file) {
+      console.log('File not found:', chunk.source_file_id);
+      return { data: null, error: new Error('File not found') };
+    }
+
+    return { data: file, error: null };
+  } catch (error) {
+    console.error('getSourceFileByChunkId error:', error);
+    return { data: null, error: error as Error };
+  }
+}
+
+/**
+ * Récupère les infos d'un fichier source directement par son ID (sources.files)
+ */
+export async function getSourceFileById(
+  fileId: string
+): Promise<ServiceResult<SourceFile>> {
+  try {
+    const { data: file, error } = await supabase
+      .schema('sources')
+      .from('files')
+      .select('*')
+      .eq('id', fileId)
+      .single();
+
+    if (error || !file) {
+      return { data: null, error: new Error('File not found') };
+    }
+
+    return { data: file, error: null };
+  } catch (error) {
+    console.error('getSourceFileById error:', error);
+    return { data: null, error: error as Error };
+  }
+}
+
+// ============================================================
 // CRÉATION - UPLOAD FILE
 // ============================================================
 
 interface UploadFileInput {
   file: File;
-  category?: DocumentCategory;
+  categoryId?: string; // UUID de la catégorie
   projectId?: string;
   description?: string;
 }
@@ -175,7 +294,7 @@ export async function uploadFile(
 ): Promise<ServiceResult<SourceFile>> {
   try {
     const profile = await getCurrentProfile();
-    const { file, category, projectId, description } = input;
+    const { file, categoryId, projectId, description } = input;
 
     // Générer un chemin unique
     const timestamp = Date.now();
@@ -208,7 +327,7 @@ export async function uploadFile(
       processing_status: 'pending',
       promotion_status: 'draft' as PromotionStatus,
       metadata: {
-        category: category || 'Autre',
+        category: categoryId || null,
         description: description || null,
       },
     };
@@ -226,6 +345,80 @@ export async function uploadFile(
     return { data, error: null };
   } catch (error) {
     console.error('uploadFile error:', error);
+    return { data: null, error: error as Error };
+  }
+}
+
+// ============================================================
+// MISE À JOUR - UPDATE FILE
+// ============================================================
+
+interface UpdateFileInput {
+  original_filename?: string;
+  categoryId?: string; // UUID de la catégorie
+  description?: string;
+  project_id?: string | null;
+}
+
+/**
+ * Met à jour un fichier (uniquement layer 'user' et créé par l'utilisateur)
+ */
+export async function updateFile(
+  id: string,
+  input: UpdateFileInput
+): Promise<ServiceResult<SourceFile>> {
+  try {
+    const profile = await getCurrentProfile();
+
+    // Construire l'objet de mise à jour
+    const updateData: Record<string, unknown> = {};
+
+    if (input.original_filename !== undefined) {
+      updateData.original_filename = input.original_filename;
+    }
+
+    if (input.project_id !== undefined) {
+      updateData.project_id = input.project_id;
+    }
+
+    // Mise à jour des métadonnées (category = UUID, description)
+    if (input.categoryId !== undefined || input.description !== undefined) {
+      // Récupérer les métadonnées actuelles
+      const { data: currentFile } = await supabase
+        .schema('sources')
+        .from('files')
+        .select('metadata')
+        .eq('id', id)
+        .single();
+
+      const currentMetadata = currentFile?.metadata || {};
+      
+      updateData.metadata = {
+        ...currentMetadata,
+        ...(input.categoryId !== undefined && { category: input.categoryId }),
+        ...(input.description !== undefined && { description: input.description }),
+      };
+    }
+
+    // Ajouter updated_at
+    updateData.updated_at = new Date().toISOString();
+
+    const { data, error } = await supabase
+      .schema('sources')
+      .from('files')
+      .update(updateData)
+      .eq('id', id)
+      .eq('created_by', profile.id)
+      .eq('layer', 'user')
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    console.log('✅ File updated:', id);
+    return { data, error: null };
+  } catch (error) {
+    console.error('updateFile error:', error);
     return { data: null, error: error as Error };
   }
 }
@@ -390,9 +583,11 @@ export async function rejectPromotion(
 // ============================================================
 
 /**
- * Compte les fichiers par couche
+ * Compte les fichiers par couche (avec filtre projet optionnel)
  */
-export async function getFilesCountByLayer(): Promise<ServiceResult<Record<DocumentLayer, number>>> {
+export async function getFilesCountByLayer(
+  projectId?: string
+): Promise<ServiceResult<Record<DocumentLayer, number>>> {
   try {
     const profile = await getCurrentProfile();
 
@@ -422,6 +617,10 @@ export async function getFilesCountByLayer(): Promise<ServiceResult<Record<Docum
           break;
         case 'project':
           query = query.eq('org_id', profile.org_id);
+          // Si un projet est sélectionné, filtrer par ce projet
+          if (projectId) {
+            query = query.eq('project_id', projectId);
+          }
           break;
         case 'user':
           query = query.eq('created_by', profile.id);
@@ -463,16 +662,50 @@ export async function getPendingPromotionsCount(): Promise<ServiceResult<number>
 }
 
 // ============================================================
+// PROJETS UTILISATEUR
+// ============================================================
+
+/**
+ * Récupère les projets accessibles à l'utilisateur
+ */
+export async function getUserProjects(): Promise<ServiceResult<Project[]>> {
+  try {
+    const profile = await getCurrentProfile();
+
+    const { data, error } = await supabase
+      .schema('core')
+      .from('projects')
+      .select('id, name, org_id, description, status, created_at, updated_at')
+      .eq('org_id', profile.org_id)
+      .eq('status', 'active')
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('getUserProjects error:', error);
+    return { data: null, error: error as Error };
+  }
+}
+
+// ============================================================
 // MOCK DATA (pour tests)
 // ============================================================
 
 /**
  * Génère des fichiers mockés pour la couche user (Perso)
+ * Note: category contient maintenant un UUID
  */
 export function getMockUserFiles(): SourceFile[] {
   const now = new Date().toISOString();
   const yesterday = new Date(Date.now() - 86400000).toISOString();
   const lastWeek = new Date(Date.now() - 7 * 86400000).toISOString();
+
+  // UUID fictifs pour les catégories mock
+  const MOCK_CAT_PIECES_MARCHE = 'bdf87560-6e1d-4bf9-84e3-620e94ee8b83';
+  const MOCK_CAT_SUIVI = 'mock-cat-suivi';
+  const MOCK_CAT_AUTRES = 'mock-cat-autres';
 
   return [
     {
@@ -499,7 +732,7 @@ export function getMockUserFiles(): SourceFile[] {
       promotion_reviewed_at: null,
       promotion_reviewed_by: null,
       promotion_comment: null,
-      metadata: { category: 'CCTP', description: 'CCTP Gros Œuvre mis à jour' },
+      metadata: { category: MOCK_CAT_PIECES_MARCHE, description: 'CCTP Gros Œuvre mis à jour' },
       created_at: yesterday,
       updated_at: yesterday,
     },
@@ -527,7 +760,7 @@ export function getMockUserFiles(): SourceFile[] {
       promotion_reviewed_at: null,
       promotion_reviewed_by: null,
       promotion_comment: 'Planning prévisionnel pour la semaine 52',
-      metadata: { category: 'Planning' },
+      metadata: { category: MOCK_CAT_SUIVI },
       created_at: now,
       updated_at: now,
     },
@@ -555,7 +788,7 @@ export function getMockUserFiles(): SourceFile[] {
       promotion_reviewed_at: yesterday,
       promotion_reviewed_by: 'mock-tl',
       promotion_comment: 'Document obsolète, version plus récente disponible',
-      metadata: { category: 'Note' },
+      metadata: { category: MOCK_CAT_AUTRES },
       created_at: lastWeek,
       updated_at: yesterday,
     },

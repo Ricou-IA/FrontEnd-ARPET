@@ -1,6 +1,6 @@
 // ============================================================
 // ARPET - App Store (Zustand)
-// Version: 4.0.0 - Ajout Documents (sources.files)
+// Version: 4.5.0 - Ajout state Viewer (Split View)
 // Date: 2025-12-18
 // ============================================================
 
@@ -12,7 +12,8 @@ import type {
   SandboxItemCreate,
   SourceFile,
   DocumentLayer,
-  DocumentCategory
+  DocumentCategoryConfig,
+  ViewerDocument
 } from '../types'
 import * as sandboxService from '../services/sandbox.service'
 import * as documentsService from '../services/documents.service'
@@ -69,18 +70,47 @@ interface AppState {
   documentsLoading: boolean
   documentsError: Error | null
   documentsActiveLayer: DocumentLayer
-  documentsActiveCategory: DocumentCategory | null
+  documentsActiveCategory: string | null
   documentsCounts: Record<DocumentLayer, number>
+  
+  // Catégories depuis Supabase
+  availableCategories: DocumentCategoryConfig[]
+  categoriesLoading: boolean
+  
+  // Projets utilisateur (pour édition)
+  userProjects: Project[]
+  userProjectsLoading: boolean
   
   // Actions Documents
   setDocumentsActiveLayer: (layer: DocumentLayer) => void
-  setDocumentsActiveCategory: (category: DocumentCategory | null) => void
+  setDocumentsActiveCategory: (categoryId: string | null) => void
   fetchDocuments: (layer?: DocumentLayer) => Promise<void>
   fetchDocumentsCounts: () => Promise<void>
-  uploadDocument: (file: File, category?: DocumentCategory, description?: string) => Promise<SourceFile | null>
+  fetchDocumentCategories: (layer?: DocumentLayer) => Promise<void>
+  uploadDocument: (file: File, categoryId?: string, description?: string) => Promise<SourceFile | null>
+  updateDocument: (id: string, updates: { filename?: string; categoryId?: string; description?: string; projectId?: string | null }) => Promise<SourceFile | null>
   deleteDocument: (id: string) => Promise<boolean>
   requestDocumentPromotion: (id: string, comment?: string) => Promise<SourceFile | null>
   clearDocumentsError: () => void
+  fetchUserProjects: () => Promise<void>
+
+  // ========================================
+  // VIEWER (Split View)
+  // ========================================
+  viewerOpen: boolean
+  viewerDocument: ViewerDocument | null
+  viewerCurrentPage: number
+  viewerTotalPages: number
+  viewerZoom: number
+  viewerLoading: boolean
+
+  // Actions Viewer
+  openViewer: (document: ViewerDocument) => void
+  closeViewer: () => void
+  setViewerPage: (page: number) => void
+  setViewerTotalPages: (total: number) => void
+  setViewerZoom: (zoom: number) => void
+  setViewerLoading: (loading: boolean) => void
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -95,7 +125,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   // PROJET
   // ========================================
   activeProject: null,
-  setActiveProject: (project) => set({ activeProject: project }),
+  setActiveProject: (project) => {
+    set({ activeProject: project })
+    // Recalculer les counts quand le projet change
+    get().fetchDocumentsCounts()
+  },
   
   // ========================================
   // CHAT
@@ -316,6 +350,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     project: 0,
     user: 0,
   },
+  
+  // Catégories
+  availableCategories: [],
+  categoriesLoading: false,
+  
+  // Projets utilisateur
+  userProjects: [],
+  userProjectsLoading: false,
 
   // ========================================
   // DOCUMENTS - Actions
@@ -323,12 +365,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setDocumentsActiveLayer: (layer) => {
     set({ documentsActiveLayer: layer, documentsActiveCategory: null })
-    // Recharger les documents pour cette couche
+    // Recharger les documents et catégories pour cette couche
     get().fetchDocuments(layer)
+    get().fetchDocumentCategories(layer)
   },
 
-  setDocumentsActiveCategory: (category) => {
-    set({ documentsActiveCategory: category })
+  setDocumentsActiveCategory: (categoryId) => {
+    set({ documentsActiveCategory: categoryId })
   },
 
   fetchDocuments: async (layer?: DocumentLayer) => {
@@ -344,19 +387,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     console.log('📂 Fetching documents for layer:', targetLayer)
 
     try {
-      // Pour la couche 'user', utiliser les mocks
-      if (targetLayer === 'user') {
-        const mockFiles = documentsService.getMockUserFiles()
-        set({ 
-          documents: mockFiles, 
-          documentsLoading: false,
-          documentsActiveLayer: targetLayer
-        })
-        console.log('✅ Mock user documents loaded:', mockFiles.length)
-        return
-      }
-
-      // Pour les autres couches, appeler le service
       const activeProject = state.activeProject
       const { data, error } = await documentsService.getFilesByLayer(targetLayer, {
         projectId: targetLayer === 'project' ? activeProject?.id : undefined,
@@ -377,22 +407,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   fetchDocumentsCounts: async () => {
+    const state = get()
     console.log('📊 Fetching documents counts...')
 
     try {
-      const { data, error } = await documentsService.getFilesCountByLayer()
+      const { data, error } = await documentsService.getFilesCountByLayer(
+        state.activeProject?.id
+      )
 
       if (error) throw error
 
       if (data) {
-        // Ajouter le count des mocks pour user
-        const mockCount = documentsService.getMockUserFiles().length
-        set({ 
-          documentsCounts: {
-            ...data,
-            user: data.user + mockCount
-          }
-        })
+        set({ documentsCounts: data })
         console.log('✅ Counts loaded:', data)
       }
     } catch (err) {
@@ -400,7 +426,35 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  uploadDocument: async (file, category, description) => {
+  fetchDocumentCategories: async (layer?: DocumentLayer) => {
+    const state = get()
+    const targetLayer = layer || state.documentsActiveLayer
+
+    if (state.categoriesLoading) {
+      console.log('⚠️ Categories fetch already in progress')
+      return
+    }
+
+    set({ categoriesLoading: true })
+    console.log('🏷️ Fetching categories for layer:', targetLayer)
+
+    try {
+      const { data, error } = await documentsService.getDocumentCategories(targetLayer)
+
+      if (error) throw error
+
+      set({ 
+        availableCategories: data || [],
+        categoriesLoading: false
+      })
+      console.log('✅ Categories loaded:', data?.length || 0)
+    } catch (err) {
+      console.error('❌ Fetch categories error:', err)
+      set({ categoriesLoading: false })
+    }
+  },
+
+  uploadDocument: async (file, categoryId, description) => {
     set({ documentsError: null })
     console.log('📤 Uploading document:', file.name)
 
@@ -408,7 +462,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const state = get()
       const { data, error } = await documentsService.uploadFile({
         file,
-        category,
+        categoryId,
         description,
         projectId: state.activeProject?.id,
       })
@@ -443,24 +497,42 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  updateDocument: async (id, updates) => {
+    set({ documentsError: null })
+    console.log('✏️ Updating document:', id, updates)
+
+    try {
+      const { data, error } = await documentsService.updateFile(id, {
+        original_filename: updates.filename,
+        categoryId: updates.categoryId,
+        description: updates.description,
+        project_id: updates.projectId,
+      })
+
+      if (error) throw error
+
+      if (data) {
+        set((state) => ({
+          documents: state.documents.map(doc => 
+            doc.id === id ? data : doc
+          )
+        }))
+        console.log('✅ Document updated:', id)
+      }
+
+      return data
+    } catch (err) {
+      console.error('❌ Update error:', err)
+      set({ documentsError: err as Error })
+      return null
+    }
+  },
+
   deleteDocument: async (id) => {
     set({ documentsError: null })
     console.log('🗑️ Deleting document:', id)
 
     try {
-      // Vérifier si c'est un mock
-      if (id.startsWith('mock-')) {
-        set((state) => ({
-          documents: state.documents.filter(doc => doc.id !== id),
-          documentsCounts: {
-            ...state.documentsCounts,
-            user: Math.max(0, state.documentsCounts.user - 1)
-          }
-        }))
-        console.log('✅ Mock document deleted:', id)
-        return true
-      }
-
       const { error } = await documentsService.deleteFile(id)
 
       if (error) throw error
@@ -487,24 +559,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     console.log('📤 Requesting promotion:', id)
 
     try {
-      // Vérifier si c'est un mock
-      if (id.startsWith('mock-')) {
-        set((state) => ({
-          documents: state.documents.map(doc => 
-            doc.id === id 
-              ? { 
-                  ...doc, 
-                  promotion_status: 'pending' as const,
-                  promotion_requested_at: new Date().toISOString(),
-                  promotion_comment: comment || null
-                }
-              : doc
-          )
-        }))
-        console.log('✅ Mock promotion requested:', id)
-        return get().documents.find(d => d.id === id) || null
-      }
-
       const { data, error } = await documentsService.requestPromotion(id, comment)
 
       if (error) throw error
@@ -527,4 +581,89 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   clearDocumentsError: () => set({ documentsError: null }),
+
+  fetchUserProjects: async () => {
+    const state = get()
+    if (state.userProjectsLoading) {
+      console.log('⚠️ User projects fetch already in progress')
+      return
+    }
+
+    set({ userProjectsLoading: true })
+    console.log('📂 Fetching user projects...')
+
+    try {
+      const { data, error } = await documentsService.getUserProjects()
+
+      if (error) throw error
+
+      set({ 
+        userProjects: data || [], 
+        userProjectsLoading: false 
+      })
+      console.log('✅ User projects loaded:', data?.length || 0)
+    } catch (err) {
+      console.error('❌ Fetch user projects error:', err)
+      set({ userProjectsLoading: false })
+    }
+  },
+
+  // ========================================
+  // VIEWER - State
+  // ========================================
+  viewerOpen: false,
+  viewerDocument: null,
+  viewerCurrentPage: 1,
+  viewerTotalPages: 1,
+  viewerZoom: 1,
+  viewerLoading: false,
+
+  // ========================================
+  // VIEWER - Actions
+  // ========================================
+
+  openViewer: (document) => {
+    console.log('👁️ Opening viewer:', document.filename)
+    set({
+      viewerOpen: true,
+      viewerDocument: document,
+      viewerCurrentPage: document.initialPage || 1,
+      viewerTotalPages: 1,
+      viewerZoom: 1,
+      viewerLoading: true,
+    })
+  },
+
+  closeViewer: () => {
+    console.log('❌ Closing viewer')
+    set({
+      viewerOpen: false,
+      viewerDocument: null,
+      viewerCurrentPage: 1,
+      viewerTotalPages: 1,
+      viewerZoom: 1,
+      viewerLoading: false,
+    })
+  },
+
+  setViewerPage: (page) => {
+    const state = get()
+    if (page >= 1 && page <= state.viewerTotalPages) {
+      set({ viewerCurrentPage: page })
+    }
+  },
+
+  setViewerTotalPages: (total) => {
+    set({ viewerTotalPages: total })
+  },
+
+  setViewerZoom: (zoom) => {
+    // Limiter le zoom entre 0.5 et 2
+    const clampedZoom = Math.max(0.5, Math.min(2, zoom))
+    set({ viewerZoom: clampedZoom })
+  },
+
+  setViewerLoading: (loading) => {
+    set({ viewerLoading: loading })
+  },
 }))

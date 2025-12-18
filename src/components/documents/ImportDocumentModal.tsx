@@ -1,19 +1,20 @@
 // ============================================================
 // ARPET - ImportDocumentModal Component
-// Version: 1.0.0 - Modale d'import de document (drag & drop)
+// Version: 1.2.0 - Catégories par UUID
 // Date: 2025-12-18
 // ============================================================
 
-import { useState, useRef, useCallback } from 'react'
-import { X, Upload, FileText, Loader2, AlertCircle, CheckCircle } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { X, Upload, FileText, Loader2 } from 'lucide-react'
 import { useAppStore } from '@/stores/appStore'
-import { CATEGORY_CONFIG, type DocumentCategory } from '@/types'
+import { isEmojiIcon } from '@/types'
 
 interface ImportDocumentModalProps {
   isOpen: boolean
   onClose: () => void
 }
 
+// Types de fichiers acceptés
 const ACCEPTED_TYPES = [
   'application/pdf',
   'application/msword',
@@ -22,115 +23,111 @@ const ACCEPTED_TYPES = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'image/jpeg',
   'image/png',
-  'image/gif',
-  'text/plain',
-  'text/csv'
+  'image/webp',
 ]
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50 Mo
 
-const CATEGORIES = Object.entries(CATEGORY_CONFIG) as [DocumentCategory, typeof CATEGORY_CONFIG[DocumentCategory]][]
-
 export function ImportDocumentModal({ isOpen, onClose }: ImportDocumentModalProps) {
-  const { uploadDocument } = useAppStore()
+  const { 
+    uploadDocument, 
+    documentsLoading,
+    availableCategories,
+    fetchDocumentCategories 
+  } = useAppStore()
 
   const [file, setFile] = useState<File | null>(null)
   const [fileName, setFileName] = useState('')
-  const [category, setCategory] = useState<DocumentCategory>('Autre')
+  const [categoryId, setCategoryId] = useState<string>('') // UUID
   const [description, setDescription] = useState('')
   const [isDragging, setIsDragging] = useState(false)
-  const [isUploading, setIsUploading] = useState(false)
-  const [uploadSuccess, setUploadSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Reset state
-  const resetState = useCallback(() => {
-    setFile(null)
-    setFileName('')
-    setCategory('Autre')
-    setDescription('')
-    setError(null)
-    setUploadSuccess(false)
-  }, [])
+  // Charger les catégories au montage si pas déjà chargées
+  useEffect(() => {
+    if (isOpen && availableCategories.length === 0) {
+      fetchDocumentCategories('user')
+    }
+  }, [isOpen, availableCategories.length, fetchDocumentCategories])
 
-  // Fermer la modale
-  const handleClose = () => {
-    if (isUploading) return
-    resetState()
-    onClose()
-  }
+  // Filtrer les catégories pour la couche 'user'
+  const userCategories = availableCategories.filter(cat => 
+    cat.target_layers?.includes('user')
+  )
 
-  // Valider le fichier
+  // Reset form quand on ferme
+  useEffect(() => {
+    if (!isOpen) {
+      setFile(null)
+      setFileName('')
+      setCategoryId('')
+      setDescription('')
+      setError(null)
+    }
+  }, [isOpen])
+
   const validateFile = (f: File): string | null => {
     if (!ACCEPTED_TYPES.includes(f.type)) {
-      return 'Type de fichier non supporté. Formats acceptés : PDF, Word, Excel, Images'
+      return 'Type de fichier non supporté. Utilisez PDF, Word, Excel ou images.'
     }
     if (f.size > MAX_FILE_SIZE) {
-      return 'Fichier trop volumineux. Taille maximale : 50 Mo'
+      return 'Fichier trop volumineux (max 50 Mo)'
     }
     return null
   }
 
-  // Sélectionner un fichier
   const handleFileSelect = (f: File) => {
     const validationError = validateFile(f)
     if (validationError) {
       setError(validationError)
       return
     }
-
-    setFile(f)
-    setFileName(f.name.replace(/\.[^/.]+$/, '')) // Nom sans extension
     setError(null)
-  }
-
-  // Input file change
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]
-    if (f) handleFileSelect(f)
-  }
-
-  // Drag & Drop
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(true)
-  }
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
+    setFile(f)
+    // Pré-remplir le nom sans l'extension
+    const nameWithoutExt = f.name.replace(/\.[^/.]+$/, '')
+    setFileName(nameWithoutExt)
   }
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setIsDragging(false)
-    
-    const f = e.dataTransfer.files?.[0]
-    if (f) handleFileSelect(f)
+    const droppedFile = e.dataTransfer.files[0]
+    if (droppedFile) {
+      handleFileSelect(droppedFile)
+    }
   }
 
-  // Upload
-  const handleUpload = async () => {
-    if (!file || isUploading) return
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0]
+    if (selectedFile) {
+      handleFileSelect(selectedFile)
+    }
+  }
+
+  const handleSubmit = async () => {
+    if (!file) return
 
     setIsUploading(true)
     setError(null)
 
     try {
-      const result = await uploadDocument(file, category, description || undefined)
+      const result = await uploadDocument(
+        file, 
+        categoryId || undefined, // UUID ou undefined
+        description || undefined
+      )
       
       if (result) {
-        setUploadSuccess(true)
-        setTimeout(() => {
-          handleClose()
-        }, 1500)
+        onClose()
       } else {
-        setError('Erreur lors de l\'upload. Veuillez réessayer.')
+        setError("Erreur lors de l'import du document")
       }
     } catch (err) {
-      setError('Erreur inattendue. Veuillez réessayer.')
+      setError("Erreur lors de l'import du document")
       console.error('Upload error:', err)
     } finally {
       setIsUploading(false)
@@ -140,77 +137,68 @@ export function ImportDocumentModal({ isOpen, onClose }: ImportDocumentModalProp
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Overlay */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
       <div 
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={handleClose}
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
       />
 
       {/* Modal */}
-      <div className="relative bg-white dark:bg-stone-900 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+      <div className="relative w-full max-w-lg mx-4 bg-white dark:bg-stone-900 rounded-xl shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 dark:border-stone-800">
-          <h2 className="text-lg font-semibold text-stone-800 dark:text-stone-100 flex items-center gap-2">
-            <Upload className="w-5 h-5" />
-            Importer un document
+          <h2 className="text-lg font-semibold text-stone-800 dark:text-stone-100">
+            📤 Importer un document
           </h2>
           <button
-            onClick={handleClose}
-            disabled={isUploading}
-            className="p-2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 rounded-lg transition disabled:opacity-50"
+            onClick={onClose}
+            className="p-1 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 rounded transition"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Contenu */}
-        <div className="p-6 space-y-5">
-          {/* Zone Drag & Drop */}
+        {/* Content */}
+        <div className="px-6 py-4 space-y-4">
+          {/* Zone de drop */}
           <div
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+            onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
             className={`
-              border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors
+              border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition
               ${isDragging 
-                ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20' 
-                : file
-                  ? 'border-green-300 bg-green-50 dark:bg-green-900/20'
-                  : 'border-stone-300 dark:border-stone-700 hover:border-stone-400 dark:hover:border-stone-600 hover:bg-stone-50 dark:hover:bg-stone-800/50'
+                ? 'border-stone-400 bg-stone-100 dark:bg-stone-800' 
+                : 'border-stone-300 dark:border-stone-700 hover:border-stone-400 dark:hover:border-stone-600'
               }
+              ${file ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' : ''}
             `}
           >
             {file ? (
-              <div className="flex flex-col items-center">
-                <FileText className="w-12 h-12 text-green-500 mb-3" />
-                <p className="text-sm font-medium text-stone-700 dark:text-stone-200 truncate max-w-full">
+              <div className="flex flex-col items-center gap-2">
+                <FileText className="w-10 h-10 text-green-600 dark:text-green-400" />
+                <p className="text-sm font-medium text-stone-700 dark:text-stone-200">
                   {file.name}
                 </p>
-                <p className="text-xs text-stone-400 dark:text-stone-500 mt-1">
+                <p className="text-xs text-stone-500 dark:text-stone-400">
                   {(file.size / 1024 / 1024).toFixed(2)} Mo
                 </p>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setFile(null)
-                    setFileName('')
-                  }}
-                  className="mt-3 text-xs text-red-500 hover:text-red-600 underline"
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setFile(null); setFileName('') }}
+                  className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400"
                 >
-                  Changer de fichier
+                  Supprimer
                 </button>
               </div>
             ) : (
-              <div className="flex flex-col items-center">
-                <Upload className="w-12 h-12 text-stone-400 dark:text-stone-500 mb-3" />
-                <p className="text-sm text-stone-600 dark:text-stone-400">
-                  <span className="font-medium">Glissez votre fichier ici</span>
-                  <br />
-                  ou cliquez pour parcourir
+              <div className="flex flex-col items-center gap-2">
+                <Upload className="w-10 h-10 text-stone-400" />
+                <p className="text-sm text-stone-600 dark:text-stone-300">
+                  Glissez un fichier ici ou <span className="text-stone-800 dark:text-white font-medium">parcourir</span>
                 </p>
-                <p className="text-xs text-stone-400 dark:text-stone-500 mt-2">
+                <p className="text-xs text-stone-400 dark:text-stone-500">
                   PDF, Word, Excel, Images • Max 50 Mo
                 </p>
               </div>
@@ -239,19 +227,20 @@ export function ImportDocumentModal({ isOpen, onClose }: ImportDocumentModalProp
             />
           </div>
 
-          {/* Catégorie */}
+          {/* Catégorie (par UUID) */}
           <div>
             <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1.5">
               Catégorie
             </label>
             <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value as DocumentCategory)}
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
               className="w-full px-4 py-2.5 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg text-sm text-stone-700 dark:text-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-300 dark:focus:ring-stone-600"
             >
-              {CATEGORIES.map(([key, config]) => (
-                <option key={key} value={key}>
-                  {config.icon} {config.label}
+              <option value="">— Sélectionner une catégorie —</option>
+              {userCategories.map(cat => (
+                <option key={cat.id} value={cat.id}>
+                  {isEmojiIcon(cat.icon || '') ? `${cat.icon} ` : ''}{cat.label}
                 </option>
               ))}
             </select>
@@ -282,34 +271,24 @@ export function ImportDocumentModal({ isOpen, onClose }: ImportDocumentModalProp
 
           {/* Erreur */}
           {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-              <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
-            </div>
-          )}
-
-          {/* Succès */}
-          {uploadSuccess && (
-            <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-              <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
-              <p className="text-xs text-green-600 dark:text-green-400">Document importé avec succès !</p>
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-800/50">
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-stone-200 dark:border-stone-800">
           <button
-            onClick={handleClose}
-            disabled={isUploading}
-            className="px-4 py-2 text-sm font-medium text-stone-600 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 transition disabled:opacity-50"
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-stone-600 dark:text-stone-300 hover:text-stone-800 dark:hover:text-white transition"
           >
             Annuler
           </button>
           <button
-            onClick={handleUpload}
-            disabled={!file || isUploading || uploadSuccess}
-            className="flex items-center gap-2 px-5 py-2 bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-800 rounded-lg hover:bg-black dark:hover:bg-white transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handleSubmit}
+            disabled={!file || !fileName.trim() || isUploading || documentsLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-800 rounded-lg hover:bg-black dark:hover:bg-white transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isUploading ? (
               <>

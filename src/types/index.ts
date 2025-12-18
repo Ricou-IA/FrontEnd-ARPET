@@ -1,6 +1,6 @@
 // ============================================================
 // ARPET - Types unifiés v3.0
-// Version: 3.2.0 - Ajout types Documents (sources.files)
+// Version: 3.5.0 - Ajout source_type pour Sandbox (Dictée rapide)
 // Date: 2025-12-18
 // ============================================================
 
@@ -90,6 +90,8 @@ export interface MessageSource {
   content_preview?: string;
   authority_label?: AuthorityLabel;
   qa_id?: string;
+  // ✅ Ajout v3.5.0 - ID du fichier source pour Split View
+  source_file_id?: string;
 }
 
 // Contexte de vote (v2)
@@ -215,20 +217,22 @@ export type ProcessingStatus = 'pending' | 'processing' | 'completed' | 'error';
 export type PromotionStatus = 'draft' | 'pending' | 'approved' | 'rejected';
 
 /**
- * Catégories de documents BTP
+ * Catégorie de document depuis Supabase (config.document_categories)
  */
-export type DocumentCategory = 
-  | 'CCTP' 
-  | 'DOE' 
-  | 'Planning' 
-  | 'Devis' 
-  | 'CR' 
-  | 'Facture' 
-  | 'Plan' 
-  | 'Note' 
-  | 'Contrat'
-  | 'PV'
-  | 'Autre';
+export interface DocumentCategoryConfig {
+  id: string;
+  slug: string;
+  label: string;
+  description: string | null;
+  icon: string | null;
+  sort_order: number;
+  is_active: boolean;
+  target_apps: string[];
+  target_layers: DocumentLayer[];
+  source_type: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 /**
  * Fichier source (table sources.files)
@@ -266,9 +270,9 @@ export interface SourceFile {
   promotion_reviewed_by: string | null;
   promotion_comment: string | null;
   
-  // Métadonnées libres (catégorie, etc.)
+  // Métadonnées libres (catégorie = slug, etc.)
   metadata: {
-    category?: DocumentCategory;
+    category?: string; // slug de la catégorie
     description?: string;
     tags?: string[];
     [key: string]: unknown;
@@ -372,26 +376,6 @@ export const LAYER_CONFIG: Record<DocumentLayer, {
 };
 
 /**
- * Catégories de documents avec icônes
- */
-export const CATEGORY_CONFIG: Record<DocumentCategory, {
-  label: string;
-  icon: string;
-}> = {
-  CCTP: { label: 'CCTP', icon: '📋' },
-  DOE: { label: 'DOE', icon: '📁' },
-  Planning: { label: 'Planning', icon: '📅' },
-  Devis: { label: 'Devis', icon: '💰' },
-  CR: { label: 'Compte-rendu', icon: '📝' },
-  Facture: { label: 'Facture', icon: '🧾' },
-  Plan: { label: 'Plan', icon: '📐' },
-  Note: { label: 'Note technique', icon: '📎' },
-  Contrat: { label: 'Contrat', icon: '📑' },
-  PV: { label: 'PV Réception', icon: '✅' },
-  Autre: { label: 'Autre', icon: '📄' },
-};
-
-/**
  * Helper: Obtenir l'icône selon le type MIME
  */
 export function getFileIcon(mimeType: string | null): string {
@@ -440,12 +424,98 @@ export function getPromotionBadge(status: PromotionStatus): {
   }
 }
 
+/**
+ * Helper: Vérifier si une icône est un emoji ou un nom Lucide
+ */
+export function isEmojiIcon(icon: string | null): boolean {
+  if (!icon) return false;
+  // Les emojis commencent généralement par un caractère > \u00FF
+  // Les noms Lucide sont en lowercase avec des tirets (ex: "book-open", "scale")
+  return /^[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u.test(icon);
+}
+
+// ============================================
+// VIEWER - Split View (V2)
+// ============================================
+
+/**
+ * Document à afficher dans le viewer
+ */
+export interface ViewerDocument {
+  id: string;
+  filename: string;
+  url: string;
+  mimeType: string | null;
+  fileSize: number | null;
+  // Optionnel: pour navigation directe vers une page/section
+  initialPage?: number;
+  highlightText?: string;
+}
+
+/**
+ * État du viewer dans le store
+ */
+export interface ViewerState {
+  isOpen: boolean;
+  document: ViewerDocument | null;
+  currentPage: number;
+  totalPages: number;
+  zoom: number;
+  isLoading: boolean;
+}
+
+/**
+ * Helper: Vérifier si un fichier est visualisable
+ */
+export function isViewableFile(mimeType: string | null, filename: string): boolean {
+  if (!mimeType && !filename) return false;
+  
+  // PDF
+  if (mimeType?.includes('pdf') || filename.toLowerCase().endsWith('.pdf')) {
+    return true;
+  }
+  
+  // Images
+  const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
+  const isImageMime = mimeType?.startsWith('image/');
+  const isImageExt = imageExtensions.some(ext => filename.toLowerCase().endsWith(ext));
+  
+  return isImageMime || isImageExt;
+}
+
+/**
+ * Helper: Obtenir le type de viewer approprié
+ */
+export function getViewerType(mimeType: string | null, filename: string): 'pdf' | 'image' | 'unsupported' {
+  if (mimeType?.includes('pdf') || filename.toLowerCase().endsWith('.pdf')) {
+    return 'pdf';
+  }
+  
+  const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
+  const isImageMime = mimeType?.startsWith('image/');
+  const isImageExt = imageExtensions.some(ext => filename.toLowerCase().endsWith(ext));
+  
+  if (isImageMime || isImageExt) {
+    return 'image';
+  }
+  
+  return 'unsupported';
+}
+
 // ============================================
 // BAC À SABLE (SANDBOX) - Types de base
 // ============================================
 export type SandboxItemStatus = 'draft' | 'pinned' | 'archived';
 export type SandboxVisibility = 'private' | 'project' | 'org';
 export type ResultType = 'table' | 'chart' | 'number' | 'text';
+
+/**
+ * Type de source d'un item sandbox (v3.5.0)
+ * - manual: Créé manuellement par l'utilisateur
+ * - chat_anchor: Ancré depuis le chat
+ * - voice_note: Créé via dictée rapide
+ */
+export type SandboxSourceType = 'manual' | 'chat_anchor' | 'voice_note';
 
 /** Message dans la conversation sandbox */
 export interface SandboxMessage {
@@ -492,6 +562,8 @@ export interface SandboxContent {
   messages: SandboxMessage[];
   display: SandboxDisplay;
   routine: SandboxRoutine | null;
+  /** ✅ NOUVEAU v3.5.0: Type de source pour identifier l'origine de l'item */
+  source_type?: SandboxSourceType;
 }
 
 /** Sandbox Item complet (depuis Supabase) */
@@ -633,4 +705,19 @@ export function getKnowledgeTypeIcon(type?: KnowledgeType): string {
 export function formatScore(score?: number): string {
   if (score === undefined || score === null) return '';
   return `${Math.round(score * 100)}%`;
+}
+
+/**
+ * Retourne l'icône selon le source_type du sandbox (v3.5.0)
+ */
+export function getSandboxSourceIcon(sourceType?: SandboxSourceType): string {
+  switch (sourceType) {
+    case 'voice_note':
+      return '🎤';
+    case 'chat_anchor':
+      return '⚓';
+    case 'manual':
+    default:
+      return '📝';
+  }
 }
