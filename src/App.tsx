@@ -1,6 +1,7 @@
 // ============================================================
 // ARPET - Main App Component with Routing
-// Version: 2.1.0 - Quick Win: ThemeProvider pour dark mode
+// Version: 3.0.0 - Ajout route /documents
+// Date: 2025-12-18
 // ============================================================
 
 import { useEffect, useState } from 'react'
@@ -10,6 +11,7 @@ import { getUserProjects } from './lib/supabase'
 import { LoginPage, ForgotPasswordPage, ResetPasswordPage } from './components/auth'
 import { Sidebar } from './components/layout/Sidebar'
 import { MainContent } from './components/layout/MainContent'
+import { DocumentsPage } from './components/documents'
 import { ThemeProvider } from './components/theme/ThemeProvider'
 import type { Project } from './types'
 
@@ -77,7 +79,38 @@ function PublicRoute({ children }: PublicRouteProps) {
 }
 
 // ============================================================
-// MAIN DASHBOARD
+// DASHBOARD LAYOUT (avec Sidebar)
+// ============================================================
+
+interface DashboardLayoutProps {
+  children: React.ReactNode
+  projects: Project[]
+  projectsLoading: boolean
+}
+
+function DashboardLayout({ children, projects, projectsLoading }: DashboardLayoutProps) {
+  return (
+    <div className="h-screen flex overflow-hidden text-stone-800 dark:text-stone-200 bg-[#FAFAF9] dark:bg-stone-950">
+      {/* Sidebar */}
+      <Sidebar projects={projects} />
+
+      {/* Contenu principal */}
+      {children}
+
+      {/* Loading overlay pour les projets */}
+      {projectsLoading && (
+        <div className="fixed inset-0 bg-black/10 dark:bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-stone-900 rounded-lg p-4 shadow-lg">
+            <p className="text-sm text-stone-600 dark:text-stone-400">Chargement des chantiers...</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================================
+// MAIN DASHBOARD (Chat)
 // ============================================================
 
 function Dashboard() {
@@ -105,22 +138,43 @@ function Dashboard() {
   }, [profile?.org_id])
 
   return (
-    <div className="h-screen flex overflow-hidden text-stone-800 dark:text-stone-200 bg-[#FAFAF9] dark:bg-stone-950">
-      {/* Sidebar */}
-      <Sidebar projects={projects} />
-
-      {/* Contenu principal */}
+    <DashboardLayout projects={projects} projectsLoading={projectsLoading}>
       <MainContent />
+    </DashboardLayout>
+  )
+}
 
-      {/* Loading overlay pour les projets */}
-      {projectsLoading && (
-        <div className="fixed inset-0 bg-black/10 dark:bg-black/30 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-stone-900 rounded-lg p-4 shadow-lg">
-            <p className="text-sm text-stone-600 dark:text-stone-400">Chargement des chantiers...</p>
-          </div>
-        </div>
-      )}
-    </div>
+// ============================================================
+// DOCUMENTS PAGE
+// ============================================================
+
+function DocumentsPageWrapper() {
+  const { profile } = useAuth()
+  const [projects, setProjects] = useState<Project[]>([])
+  const [projectsLoading, setProjectsLoading] = useState(false)
+
+  useEffect(() => {
+    async function loadProjects() {
+      if (profile?.org_id) {
+        setProjectsLoading(true)
+        try {
+          const data = await getUserProjects(profile.org_id)
+          setProjects(data as Project[])
+        } catch (error) {
+          console.error('Error loading projects:', error)
+        } finally {
+          setProjectsLoading(false)
+        }
+      }
+    }
+
+    loadProjects()
+  }, [profile?.org_id])
+
+  return (
+    <DashboardLayout projects={projects} projectsLoading={projectsLoading}>
+      <DocumentsPage />
+    </DashboardLayout>
   )
 }
 
@@ -171,6 +225,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/documents"
+            element={
+              <ProtectedRoute>
+                <DocumentsPageWrapper />
               </ProtectedRoute>
             }
           />

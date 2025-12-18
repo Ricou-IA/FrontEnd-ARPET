@@ -1,13 +1,14 @@
 // ============================================================
 // ARPET - Sidebar Component
-// Version: 2.0.0 - UX Refonte (icône + titre pour Pinned)
-// Date: 2025-12-04
+// Version: 3.0.0 - Ajout lien Documents
+// Date: 2025-12-18
 // ============================================================
 
 import { useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { 
   ChevronLeft, ChevronRight, Globe, FileText, Plus, LogOut,
-  Book, BarChart3
+  Book, BarChart3, FolderOpen, MessageSquare
 } from 'lucide-react'
 import { useAppStore } from '../../stores/appStore'
 import { useAuth } from '../../hooks/useAuth'
@@ -21,6 +22,8 @@ interface SidebarProps {
 }
 
 export function Sidebar({ projects }: SidebarProps) {
+  const location = useLocation()
+  const navigate = useNavigate()
   const { sidebarOpen, toggleSidebar } = useAppStore()
   const { profile, signOut } = useAuth()
   const { items: sandboxItems } = useSandboxItems()
@@ -61,19 +64,26 @@ export function Sidebar({ projects }: SidebarProps) {
     }
   }
 
+  // Navigation helpers
+  const isActive = (path: string) => location.pathname === path
+
+  const handleNavigate = (path: string) => {
+    navigate(path)
+  }
+
   return (
     <>
       <aside
         className={`
           ${sidebarOpen ? 'w-[280px]' : 'w-[70px] sidebar-collapsed'}
-          bg-[#F5F5F4] flex flex-col border-r border-stone-200 flex-shrink-0 z-20 relative group
+          bg-[#F5F5F4] dark:bg-stone-900 flex flex-col border-r border-stone-200 dark:border-stone-800 flex-shrink-0 z-20 relative group
           transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]
         `}
       >
         {/* Toggle button */}
         <button
           onClick={toggleSidebar}
-          className="absolute -right-3 top-6 bg-white border border-stone-200 rounded-full p-1 text-stone-400 hover:text-stone-800 shadow-sm z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+          className="absolute -right-3 top-6 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-full p-1 text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 shadow-sm z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
         >
           {sidebarOpen ? (
             <ChevronLeft className="w-3.5 h-3.5" />
@@ -90,15 +100,70 @@ export function Sidebar({ projects }: SidebarProps) {
         {/* Contenu scrollable */}
         <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
 
+          {/* Section Navigation */}
+          <div>
+            <h3 className="section-title text-[10px] font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wide mb-2 px-2">
+              Navigation
+            </h3>
+            <div className="space-y-1">
+              {/* Chat */}
+              <button 
+                onClick={() => handleNavigate('/')}
+                className={`sidebar-item w-full flex items-center gap-3 px-2 py-2 rounded-lg transition group ${
+                  isActive('/') 
+                    ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-sm' 
+                    : 'text-stone-600 dark:text-stone-400 hover:bg-stone-200/50 dark:hover:bg-stone-800/50 hover:text-stone-900 dark:hover:text-stone-100'
+                }`}
+              >
+                <div className={`w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 shadow-sm ${
+                  isActive('/') 
+                    ? 'bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-800' 
+                    : 'bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-500 dark:text-stone-400'
+                }`}>
+                  <MessageSquare className="w-4 h-4" />
+                </div>
+                <div className="sidebar-text text-left flex-1 min-w-0">
+                  <span className="block text-sm font-medium">Chat</span>
+                </div>
+              </button>
+
+              {/* Documents */}
+              <button 
+                onClick={() => handleNavigate('/documents')}
+                className={`sidebar-item w-full flex items-center gap-3 px-2 py-2 rounded-lg transition group ${
+                  isActive('/documents') 
+                    ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-sm' 
+                    : 'text-stone-600 dark:text-stone-400 hover:bg-stone-200/50 dark:hover:bg-stone-800/50 hover:text-stone-900 dark:hover:text-stone-100'
+                }`}
+              >
+                <div className={`w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 shadow-sm ${
+                  isActive('/documents') 
+                    ? 'bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-800' 
+                    : 'bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-500 dark:text-stone-400'
+                }`}>
+                  <FolderOpen className="w-4 h-4" />
+                </div>
+                <div className="sidebar-text text-left flex-1 min-w-0">
+                  <span className="block text-sm font-medium">Documents</span>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Séparateur */}
+          {sidebarOpen && (
+            <div className="w-full h-px bg-stone-200 dark:bg-stone-700 my-2" />
+          )}
+
           {/* Section Contexte */}
           <div>
-            <h3 className="section-title text-[10px] font-bold text-stone-400 uppercase tracking-wide mb-2 px-2">
+            <h3 className="section-title text-[10px] font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wide mb-2 px-2">
               Contexte
             </h3>
             <div className="space-y-1">
               {/* Couche de Savoir */}
-              <button className="sidebar-item w-full flex items-center gap-3 px-2 py-2 text-stone-600 hover:bg-stone-200/50 hover:text-stone-900 rounded-lg transition group">
-                <div className="w-8 h-8 rounded-md bg-white border border-stone-200 flex items-center justify-center flex-shrink-0 text-stone-500 shadow-sm">
+              <button className="sidebar-item w-full flex items-center gap-3 px-2 py-2 text-stone-600 dark:text-stone-400 hover:bg-stone-200/50 dark:hover:bg-stone-800/50 hover:text-stone-900 dark:hover:text-stone-100 rounded-lg transition group">
+                <div className="w-8 h-8 rounded-md bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 flex items-center justify-center flex-shrink-0 text-stone-500 dark:text-stone-400 shadow-sm">
                   <Globe className="w-4 h-4" />
                 </div>
                 <div className="sidebar-text text-left flex-1 min-w-0">
@@ -107,8 +172,8 @@ export function Sidebar({ projects }: SidebarProps) {
               </button>
 
               {/* Mes Connaissances */}
-              <button className="sidebar-item w-full flex items-center gap-3 px-2 py-2 text-stone-600 hover:bg-stone-200/50 hover:text-stone-900 rounded-lg transition group">
-                <div className="w-8 h-8 rounded-md bg-orange-50 text-orange-600 border border-orange-100 flex items-center justify-center flex-shrink-0 shadow-sm">
+              <button className="sidebar-item w-full flex items-center gap-3 px-2 py-2 text-stone-600 dark:text-stone-400 hover:bg-stone-200/50 dark:hover:bg-stone-800/50 hover:text-stone-900 dark:hover:text-stone-100 rounded-lg transition group">
+                <div className="w-8 h-8 rounded-md bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 border border-orange-100 dark:border-orange-800 flex items-center justify-center flex-shrink-0 shadow-sm">
                   <FileText className="w-4 h-4" />
                 </div>
                 <div className="sidebar-text text-left flex-1 min-w-0">
@@ -117,7 +182,7 @@ export function Sidebar({ projects }: SidebarProps) {
               </button>
 
               {/* Ajouter source */}
-              <button className="sidebar-item w-full flex items-center gap-3 px-2 py-2 text-stone-400 hover:text-stone-700 hover:bg-white rounded-lg transition group border border-transparent hover:border-stone-200 border-dashed mt-2">
+              <button className="sidebar-item w-full flex items-center gap-3 px-2 py-2 text-stone-400 dark:text-stone-500 hover:text-stone-700 dark:hover:text-stone-300 hover:bg-white dark:hover:bg-stone-800 rounded-lg transition group border border-transparent hover:border-stone-200 dark:hover:border-stone-700 border-dashed mt-2">
                 <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
                   <Plus className="w-5 h-5" />
                 </div>
@@ -130,17 +195,17 @@ export function Sidebar({ projects }: SidebarProps) {
 
           {/* Séparateur */}
           {sidebarOpen && (
-            <div className="w-full h-px bg-stone-200 my-2" />
+            <div className="w-full h-px bg-stone-200 dark:bg-stone-700 my-2" />
           )}
 
           {/* Section Espace de travail (Pinned) */}
           <div>
-            <h3 className="section-title text-[10px] font-bold text-stone-400 uppercase tracking-wide mb-2 px-2">
+            <h3 className="section-title text-[10px] font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wide mb-2 px-2">
               Espace de travail
             </h3>
             <div className="space-y-1">
               {pinnedItems.length === 0 ? (
-                <p className="sidebar-text text-xs text-stone-400 px-2 py-2 italic">
+                <p className="sidebar-text text-xs text-stone-400 dark:text-stone-500 px-2 py-2 italic">
                   Aucun rapport épinglé
                 </p>
               ) : (
@@ -148,7 +213,7 @@ export function Sidebar({ projects }: SidebarProps) {
                   <button
                     key={item.id}
                     onClick={() => handlePinnedItemClick(item)}
-                    className="sidebar-item w-full flex items-center gap-3 px-2 py-2 text-stone-600 hover:bg-stone-200/50 hover:text-stone-900 rounded-lg transition group"
+                    className="sidebar-item w-full flex items-center gap-3 px-2 py-2 text-stone-600 dark:text-stone-400 hover:bg-stone-200/50 dark:hover:bg-stone-800/50 hover:text-stone-900 dark:hover:text-stone-100 rounded-lg transition group"
                   >
                     {/* Icône selon type d'agent */}
                     <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
@@ -169,10 +234,10 @@ export function Sidebar({ projects }: SidebarProps) {
         </div>
 
         {/* Profil en bas de sidebar */}
-        <div className="p-4 border-t border-stone-200 mt-auto">
-          <div className="sidebar-item w-full flex items-center gap-3 px-2 py-2 text-stone-800 rounded-lg group text-left">
+        <div className="p-4 border-t border-stone-200 dark:border-stone-800 mt-auto">
+          <div className="sidebar-item w-full flex items-center gap-3 px-2 py-2 text-stone-800 dark:text-stone-200 rounded-lg group text-left">
             {/* Avatar */}
-            <div className="w-9 h-9 rounded-full bg-[#9B2C2C] text-white flex items-center justify-center font-serif text-sm border-2 border-white shadow-sm flex-shrink-0">
+            <div className="w-9 h-9 rounded-full bg-[#9B2C2C] text-white flex items-center justify-center font-serif text-sm border-2 border-white dark:border-stone-800 shadow-sm flex-shrink-0">
               {profile?.full_name?.charAt(0) || 'U'}
             </div>
 
@@ -181,7 +246,7 @@ export function Sidebar({ projects }: SidebarProps) {
               <p className="text-xs font-semibold truncate">
                 {profile?.full_name || 'Utilisateur'}
               </p>
-              <p className="text-[10px] text-stone-500 truncate">
+              <p className="text-[10px] text-stone-500 dark:text-stone-400 truncate">
                 {profile?.business_role || 'Membre'}
               </p>
             </div>
@@ -189,7 +254,7 @@ export function Sidebar({ projects }: SidebarProps) {
             {/* Bouton déconnexion */}
             <button
               onClick={handleSignOut}
-              className="sidebar-text p-1.5 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded transition opacity-0 group-hover:opacity-100"
+              className="sidebar-text p-1.5 text-stone-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition opacity-0 group-hover:opacity-100"
               title="Déconnexion"
             >
               <LogOut className="w-4 h-4" />
