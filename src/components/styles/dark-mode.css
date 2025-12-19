@@ -1,0 +1,100 @@
+/* ============================================================
+ * ARPET - Dark Mode Styles
+ * Version: 1.0.0 - Quick Win: Variables CSS + Dark theme
+ * Date: 2025-12-17
+ * ============================================================ */
+
+/* ============================================================
+ * CSS VARIABLES - Light Theme (default)
+ * ============================================================ */
+ :root {
+    /* Backgrounds */
+    --bg-primary: #ffffff;
+    --bg-secondary: #fafaf9;
+    --bg-tertiary: #f5f5f4;
+    --bg-elevated: #ffffff;
+    
+    /* Text */
+    --text-primary: #1c1917;
+    --text-secondary: #44403c;
+    --text-tertiary: #78716c;
+    --text-muted: #a8a29e;
+    
+    /* Borders */
+    --border-default: #e7e5e4;
+    --border-light: #f5f5f4;
+    
+    /* Chat specific */
+    --chat-user-bg: #f5f5f4;
+    --chat-assistant-bg: #ffffff;
+    --chat-assistant-border: #f5f5f4;
+    --chat-input-bg: #ffffff;
+    --chat-input-border: #e7e5e4;
+  }
+  
+  /* ============================================================
+   * CSS VARIABLES - Dark Theme
+   * ============================================================ */
+  .dark {
+    /* Backgrounds */
+    --bg-primary: #0c0a09;
+    --bg-secondary: #1c1917;
+    --bg-tertiary: #292524;
+    --bg-elevated: #1c1917;
+    
+    /* Text */
+    --text-primary: #fafaf9;
+    --text-secondary: #e7e5e4;
+    --text-tertiary: #a8a29e;
+    --text-muted: #78716c;
+    
+    /* Borders */
+    --border-default: #44403c;
+    --border-light: #292524;
+    
+    /* Chat specific */
+    --chat-user-bg: #292524;
+    --chat-assistant-bg: #1c1917;
+    --chat-assistant-border: #292524;
+    --chat-input-bg: #1c1917;
+    --chat-input-border: #44403c;
+  }
+  
+  /* ============================================================
+   * BASE STYLES
+   * ============================================================ */
+  body {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+  
+  /* ============================================================
+   * CHAT CONTAINER
+   * ============================================================ */
+  .chat-container {
+    background-color: var(--chat-input-bg);
+    border-color: var(--chat-input-border);
+  }
+  
+  /* ============================================================
+   * SCROLLBAR DARK MODE
+   * ============================================================ */
+  .dark ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  .dark ::-webkit-scrollbar-track {
+    background: var(--bg-tertiary);
+  }
+  
+  .dark ::-webkit-scrollbar-thumb {
+    background: #57534e;
+    border-radius: 4px;
+  }
+  
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: #78716c;
+  }
+  
