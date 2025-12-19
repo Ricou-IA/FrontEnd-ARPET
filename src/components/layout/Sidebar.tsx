@@ -1,7 +1,7 @@
 // ============================================================
 // ARPET - Sidebar Component
-// Version: 3.1.0 - Ajout bouton Réunion (Phase 2.2)
-// Date: 2025-12-18
+// Version: 3.2.0 - Correction routes /app/*
+// Date: 2025-12-19
 // ============================================================
 
 import { useState } from 'react'
@@ -79,6 +79,13 @@ export function Sidebar({ projects }: SidebarProps) {
     navigate(path)
   }
 
+  // Routes de l'application
+  const routes = {
+    chat: '/app',
+    documents: '/app/documents',
+    settings: '/app/settings'
+  }
+
   return (
     <>
       <aside
@@ -115,17 +122,17 @@ export function Sidebar({ projects }: SidebarProps) {
             </h3>
             <div className="space-y-1">
               {/* Chat */}
-              <button 
-                onClick={() => handleNavigate('/')}
+              <button
+                onClick={() => handleNavigate(routes.chat)}
                 className={`sidebar-item w-full flex items-center gap-3 px-2 py-2 rounded-lg transition group ${
-                  isActive('/') 
-                    ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-sm' 
+                  isActive(routes.chat)
+                    ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-sm'
                     : 'text-stone-600 dark:text-stone-400 hover:bg-stone-200/50 dark:hover:bg-stone-800/50 hover:text-stone-900 dark:hover:text-stone-100'
                 }`}
               >
                 <div className={`w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 shadow-sm ${
-                  isActive('/') 
-                    ? 'bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-800' 
+                  isActive(routes.chat)
+                    ? 'bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-800'
                     : 'bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-500 dark:text-stone-400'
                 }`}>
                   <MessageSquare className="w-4 h-4" />
@@ -136,17 +143,17 @@ export function Sidebar({ projects }: SidebarProps) {
               </button>
 
               {/* Documents */}
-              <button 
-                onClick={() => handleNavigate('/documents')}
+              <button
+                onClick={() => handleNavigate(routes.documents)}
                 className={`sidebar-item w-full flex items-center gap-3 px-2 py-2 rounded-lg transition group ${
-                  isActive('/documents') 
-                    ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-sm' 
+                  isActive(routes.documents)
+                    ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-sm'
                     : 'text-stone-600 dark:text-stone-400 hover:bg-stone-200/50 dark:hover:bg-stone-800/50 hover:text-stone-900 dark:hover:text-stone-100'
                 }`}
               >
                 <div className={`w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 shadow-sm ${
-                  isActive('/documents') 
-                    ? 'bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-800' 
+                  isActive(routes.documents)
+                    ? 'bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-800'
                     : 'bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-500 dark:text-stone-400'
                 }`}>
                   <FolderOpen className="w-4 h-4" />

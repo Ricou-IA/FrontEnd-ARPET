@@ -1,10 +1,10 @@
 // ============================================================
 // ARPET - PdfViewer Component
-// Version: 1.1.0 - Text selection enabled
-// Date: 2025-12-18
+// Version: 1.2.0 - Responsive width adaptation
+// Date: 2025-12-19
 // ============================================================
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
 import { Loader2, FileWarning } from 'lucide-react'
 
@@ -20,17 +20,42 @@ interface PdfViewerProps {
   onLoadError: (error: Error) => void
 }
 
-export function PdfViewer({ 
-  url, 
+export function PdfViewer({
+  url,
   filename,
-  zoom, 
-  currentPage, 
+  zoom,
+  currentPage,
   onLoadSuccess,
-  onLoadError 
+  onLoadError
 }: PdfViewerProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [hasError, setHasError] = useState(false)
   const [numPages, setNumPages] = useState(0)
+  const [containerWidth, setContainerWidth] = useState<number | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Observer le redimensionnement du conteneur
+  const updateContainerWidth = useCallback(() => {
+    if (containerRef.current) {
+      // Laisser un padding de 32px (16px de chaque côté)
+      const width = containerRef.current.clientWidth - 32
+      setContainerWidth(width > 0 ? width : null)
+    }
+  }, [])
+
+  useEffect(() => {
+    updateContainerWidth()
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateContainerWidth()
+    })
+
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current)
+    }
+
+    return () => resizeObserver.disconnect()
+  }, [updateContainerWidth])
 
   // Reset quand l'URL change
   useEffect(() => {
@@ -63,8 +88,14 @@ export function PdfViewer({
     )
   }
 
+  // Calculer la largeur effective avec le zoom
+  const effectiveWidth = containerWidth ? Math.round(containerWidth * zoom) : undefined
+
   return (
-    <div className="relative w-full h-full overflow-auto bg-stone-200 dark:bg-stone-900">
+    <div
+      ref={containerRef}
+      className="relative w-full h-full overflow-auto bg-stone-200 dark:bg-stone-900"
+    >
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-stone-100 dark:bg-stone-800 z-10">
           <div className="flex flex-col items-center">
@@ -73,7 +104,7 @@ export function PdfViewer({
           </div>
         </div>
       )}
-      
+
       <div className="flex justify-center p-4">
         <Document
           file={url}
@@ -84,7 +115,7 @@ export function PdfViewer({
         >
           <Page
             pageNumber={currentPage}
-            scale={zoom}
+            width={effectiveWidth}
             loading={null}
             className="shadow-lg"
             renderTextLayer={true}

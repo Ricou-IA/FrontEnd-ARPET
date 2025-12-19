@@ -1,10 +1,7 @@
 // ============================================================
 // ARPET - Auth Components Exports
-// Version: 1.1.0
+// Version: 1.2.0 - Nettoyage composants orphelins
 // ============================================================
 
-export { LoginPage } from './LoginPage'
-export { ForgotPasswordPage } from './ForgotPasswordPage'
-export { ResetPasswordPage } from './ResetPasswordPage'
 export { AuthBranding } from './AuthBranding'
 export { PlumbBob } from './PlumbBob'

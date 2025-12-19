@@ -1,7 +1,7 @@
 // ============================================================
 // ARPET - Dashboard Page
-// Version: 2.0.0 - Intégration logique métier complète
-// Date: 2025-12-18
+// Version: 2.1.0 - Réintégration SandboxGrid
+// Date: 2025-12-19
 // ============================================================
 
 import { useEffect, useRef } from 'react'
@@ -9,6 +9,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useAppStore } from '../stores/appStore'
 import { MessageBubble } from '../components/chat/MessageBubble'
 import { ChatInput } from '../components/chat/ChatInput'
+import { SandboxGrid } from '../components/sandbox/SandboxGrid'
 import { supabase } from '../lib/supabase'
 import { createSandboxItem } from '../services/sandbox.service'
 import { createEmptySandboxContent } from '../types'
@@ -211,7 +212,7 @@ export function Dashboard() {
         </h1>
       </header>
 
-      {/* Zone Messages - Flottant sur la grille */}
+      {/* Zone Messages + Sandbox - Scrollable */}
       <div className="flex-1 overflow-y-auto px-8 pb-6">
         <div className="max-w-3xl mx-auto space-y-8 pt-4">
           {/* Messages */}
@@ -243,6 +244,9 @@ export function Dashboard() {
           {/* Ref pour auto-scroll */}
           <div ref={messagesEndRef} className="h-8" />
         </div>
+
+        {/* Bac à sable - Grille de brouillons */}
+        <SandboxGrid />
       </div>
 
       {/* Zone de Saisie - Console Technique */}
