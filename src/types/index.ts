@@ -1,6 +1,6 @@
 // ============================================================
 // ARPET - Types unifiés v3.0
-// Version: 3.5.0 - Ajout source_type pour Sandbox (Dictée rapide)
+// Version: 3.6.0 - Ajout types Meeting (Phase 2.2)
 // Date: 2025-12-18
 // ============================================================
 
@@ -514,8 +514,9 @@ export type ResultType = 'table' | 'chart' | 'number' | 'text';
  * - manual: Créé manuellement par l'utilisateur
  * - chat_anchor: Ancré depuis le chat
  * - voice_note: Créé via dictée rapide
+ * - meeting_cr: Créé via CR de réunion (v3.6.0)
  */
-export type SandboxSourceType = 'manual' | 'chat_anchor' | 'voice_note';
+export type SandboxSourceType = 'manual' | 'chat_anchor' | 'voice_note' | 'meeting_cr';
 
 /** Message dans la conversation sandbox */
 export interface SandboxMessage {
@@ -564,6 +565,8 @@ export interface SandboxContent {
   routine: SandboxRoutine | null;
   /** ✅ NOUVEAU v3.5.0: Type de source pour identifier l'origine de l'item */
   source_type?: SandboxSourceType;
+  /** ✅ NOUVEAU v3.6.0: ID de la réunion source (si meeting_cr) */
+  source_meeting_id?: string;
 }
 
 /** Sandbox Item complet (depuis Supabase) */
@@ -621,6 +624,83 @@ export interface WorkspaceWidget {
   lastRunAt: Date | null;
   canRefresh: boolean;
 }
+
+// ============================================
+// RÉUNIONS (MEETINGS) - Phase 2.2
+// ============================================
+
+/**
+ * Étapes de la modale d'enregistrement de réunion
+ */
+export type MeetingStep = 'prepare' | 'record' | 'processing' | 'review';
+
+/**
+ * Statut du traitement de l'audio
+ */
+export type MeetingProcessingStatus = 
+  | 'idle'
+  | 'uploading'
+  | 'transcribing'
+  | 'analyzing'
+  | 'completed'
+  | 'error';
+
+/**
+ * Structure d'un point d'action extrait du CR
+ */
+export interface MeetingActionItem {
+  id: string;
+  who: string;
+  what: string;
+  when: string | null;
+  priority?: 'high' | 'medium' | 'low';
+}
+
+/**
+ * Structure du CR généré
+ */
+export interface MeetingCR {
+  summary: string;
+  decisions: string[];
+  action_items: MeetingActionItem[];
+  open_questions: string[];
+  key_points: string[];
+}
+
+/**
+ * Données de préparation de la réunion (étape 1)
+ */
+export interface MeetingPrepareData {
+  title: string;
+  participants?: string;
+  agenda?: string;
+}
+
+/**
+ * Réponse de l'Edge Function process-audio
+ */
+export interface ProcessAudioResponse {
+  success: boolean;
+  meeting_id: string;
+  transcript: string;
+  summary: string;
+  action_items: MeetingActionItem[];
+  audio_url: string;
+  storage_path: string;
+  error?: string;
+}
+
+/**
+ * Configuration des labels de progression
+ */
+export const MEETING_PROCESSING_LABELS: Record<MeetingProcessingStatus, string> = {
+  idle: 'En attente',
+  uploading: 'Envoi de l\'audio...',
+  transcribing: 'Transcription en cours...',
+  analyzing: 'Analyse et génération du CR...',
+  completed: 'Terminé !',
+  error: 'Erreur',
+};
 
 // ============================================
 // HELPERS
@@ -708,7 +788,7 @@ export function formatScore(score?: number): string {
 }
 
 /**
- * Retourne l'icône selon le source_type du sandbox (v3.5.0)
+ * Retourne l'icône selon le source_type du sandbox (v3.6.0)
  */
 export function getSandboxSourceIcon(sourceType?: SandboxSourceType): string {
   switch (sourceType) {
@@ -716,8 +796,41 @@ export function getSandboxSourceIcon(sourceType?: SandboxSourceType): string {
       return '🎤';
     case 'chat_anchor':
       return '⚓';
+    case 'meeting_cr':
+      return '📹';
     case 'manual':
     default:
       return '📝';
   }
+}
+
+/**
+ * Formate une durée en secondes en format mm:ss ou hh:mm:ss
+ */
+export function formatMeetingDuration(seconds: number): string {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+
+  if (hrs > 0) {
+    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Génère un titre par défaut pour une réunion
+ */
+export function generateMeetingDefaultTitle(): string {
+  const now = new Date();
+  const date = now.toLocaleDateString('fr-FR', { 
+    day: '2-digit', 
+    month: '2-digit', 
+    year: 'numeric' 
+  });
+  const time = now.toLocaleTimeString('fr-FR', { 
+    hour: '2-digit', 
+    minute: '2-digit' 
+  });
+  return `Réunion du ${date} à ${time}`;
 }

@@ -1,6 +1,6 @@
 // ============================================================
 // ARPET - Sidebar Component
-// Version: 3.0.0 - Ajout lien Documents
+// Version: 3.1.0 - Ajout bouton Réunion (Phase 2.2)
 // Date: 2025-12-18
 // ============================================================
 
@@ -8,13 +8,14 @@ import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { 
   ChevronLeft, ChevronRight, Globe, FileText, Plus, LogOut,
-  Book, BarChart3, FolderOpen, MessageSquare
+  Book, BarChart3, FolderOpen, MessageSquare, Video
 } from 'lucide-react'
 import { useAppStore } from '../../stores/appStore'
 import { useAuth } from '../../hooks/useAuth'
 import { ProjectSelector } from '../ui/ProjectSelector'
 import { useSandboxItems } from '@/hooks/useSandbox'
 import { SandboxEditor } from '../sandbox/SandboxEditor'
+import { MeetingRecordModal } from '../meeting'
 import type { Project, SandboxItem } from '../../types'
 
 interface SidebarProps {
@@ -30,6 +31,9 @@ export function Sidebar({ projects }: SidebarProps) {
 
   // État pour ouvrir l'éditeur d'un item pinned
   const [selectedPinnedItem, setSelectedPinnedItem] = useState<SandboxItem | null>(null)
+  
+  // État pour la modale de réunion
+  const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false)
 
   const handleSignOut = async () => {
     try {
@@ -44,6 +48,10 @@ export function Sidebar({ projects }: SidebarProps) {
 
   // Déterminer le type d'agent et l'icône
   const getAgentIcon = (item: SandboxItem) => {
+    // Vérifier si c'est un CR de réunion
+    if (item.content.source_type === 'meeting_cr') {
+      return <Video className="w-4 h-4 text-amber-500" />
+    }
     if (item.content.routine) {
       return <BarChart3 className="w-4 h-4 text-orange-500" />
     }
@@ -145,6 +153,19 @@ export function Sidebar({ projects }: SidebarProps) {
                 </div>
                 <div className="sidebar-text text-left flex-1 min-w-0">
                   <span className="block text-sm font-medium">Documents</span>
+                </div>
+              </button>
+
+              {/* Réunion */}
+              <button 
+                onClick={() => setIsMeetingModalOpen(true)}
+                className="sidebar-item w-full flex items-center gap-3 px-2 py-2 rounded-lg transition group text-stone-600 dark:text-stone-400 hover:bg-stone-200/50 dark:hover:bg-stone-800/50 hover:text-stone-900 dark:hover:text-stone-100"
+              >
+                <div className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 shadow-sm bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400">
+                  <Video className="w-4 h-4" />
+                </div>
+                <div className="sidebar-text text-left flex-1 min-w-0">
+                  <span className="block text-sm font-medium">Réunion</span>
                 </div>
               </button>
             </div>
@@ -272,6 +293,12 @@ export function Sidebar({ projects }: SidebarProps) {
           onDelete={() => setSelectedPinnedItem(null)}
         />
       )}
+
+      {/* Modal pour enregistrement de réunion */}
+      <MeetingRecordModal
+        isOpen={isMeetingModalOpen}
+        onClose={() => setIsMeetingModalOpen(false)}
+      />
     </>
   )
 }

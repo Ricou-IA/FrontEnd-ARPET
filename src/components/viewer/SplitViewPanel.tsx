@@ -102,8 +102,7 @@ export function SplitViewPanel() {
 
   return (
     <div 
-      className="h-full flex flex-col bg-white dark:bg-stone-900 border-l border-stone-200 dark:border-stone-700 shadow-xl"
-      style={{ width: '45%', minWidth: '400px', maxWidth: '700px' }}
+      className="h-full flex flex-col bg-white dark:bg-stone-900 border-l border-stone-200 dark:border-stone-700 md:border-l shadow-xl w-full md:w-[45%] md:min-w-[400px] md:max-w-[700px]"
     >
       {/* Toolbar */}
       <ViewerToolbar
