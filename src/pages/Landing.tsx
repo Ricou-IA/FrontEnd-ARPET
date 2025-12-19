@@ -5,7 +5,7 @@
 // ============================================================
 
 import { Link } from 'react-router-dom'
-import { AlertCircle, Clock, Scale, Mic, FileText, Shield, ChevronDown } from 'lucide-react'
+import { AlertCircle, Clock, Scale, Mic, FileText, ChevronDown, Search, Users } from 'lucide-react'
 import { HeroBranding } from '../components/auth/HeroBranding'
 import { AppShowcase } from '../components/landing/AppShowcase'
 export function Landing() {
@@ -58,16 +58,20 @@ export function Landing() {
       </section>
 
       {/* ============================================================
-          SECTION B : LE PROBLÈME
+          SECTION B : LA PROMESSE
           ============================================================ */}
       <section className="pt-12 pb-20 px-4">
         <div className="max-w-6xl mx-auto">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             {/* Colonne gauche : Texte */}
             <div>
-              <h2 className="font-serif text-4xl md:text-5xl text-[#0B0F17] mb-8 leading-tight">
-                Vous n'avez pas fait 5 ans d'études pour faire de la mise en page le dimanche.
+              <h2 className="font-serif text-4xl md:text-5xl text-[#0B0F17] mb-6 leading-tight">
+                Le chantier se gagne sur le terrain, pas derrière un écran.
               </h2>
+              
+              <p className="text-lg text-gray-600 mb-10 leading-relaxed">
+                Libérez-vous des tâches administratives chronophages. Retrouvez vos équipes et la réalité du chantier.
+              </p>
               
               <ul className="space-y-6">
                 <li className="flex items-start gap-4">
@@ -75,9 +79,9 @@ export function Landing() {
                     <AlertCircle className="w-6 h-6 text-red-600" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-1">Charge mentale</h3>
-                    <p className="text-gray-600 text-sm">
-                      Rédaction de CR, vérification de normes, gestion documentaire... Le temps s'accumule.
+                    <h3 className="font-semibold text-gray-900 mb-1">Charge mentale allégée</h3>
+                    <p className="text-gray-600 text-sm leading-relaxed">
+                      Déléguez la rédaction et la synthèse. Conservez votre énergie mentale pour la prise de décision et le management.
                     </p>
                   </div>
                 </li>
@@ -87,9 +91,9 @@ export function Landing() {
                     <Clock className="w-6 h-6 text-red-600" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-1">Temps perdu</h3>
-                    <p className="text-gray-600 text-sm">
-                      Des heures passées sur des tâches administratives au lieu de gérer vos chantiers.
+                    <h3 className="font-semibold text-gray-900 mb-1">Temps utile retrouvé</h3>
+                    <p className="text-gray-600 text-sm leading-relaxed">
+                      Ne subissez plus l'administratif. Transformez les heures de bureau passives en présence active sur vos opérations.
                     </p>
                   </div>
                 </li>
@@ -99,9 +103,9 @@ export function Landing() {
                     <Scale className="w-6 h-6 text-red-600" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-1">Risque juridique</h3>
-                    <p className="text-gray-600 text-sm">
-                      Erreurs de conformité, oublis de normes... Les conséquences peuvent être lourdes.
+                    <h3 className="font-semibold text-gray-900 mb-1">Sources fiables et maîtrisées</h3>
+                    <p className="text-gray-600 text-sm leading-relaxed">
+                      Les règles de l'art, à portée de clic. Vos écrits et analyses s'appuient instantanément sur votre base documentaire et les normes en vigueur.
                     </p>
                   </div>
                 </li>
@@ -115,52 +119,86 @@ export function Landing() {
       </section>
 
       {/* ============================================================
-          SECTION C : LES FONCTIONNALITÉS (Bento Grid)
+          SECTION C : LA CAISSE À OUTILS (Bento Grid 2x2)
           ============================================================ */}
-      <section className="py-20 px-4 bg-zinc-50">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="font-serif text-4xl md:text-5xl text-[#0B0F17] text-center mb-16">
-            3 Outils. Une seule interface.
-          </h2>
+      <section className="py-20 px-4 relative bg-white bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]">
+        <div className="max-w-6xl mx-auto relative z-10">
+          <div className="text-center mb-16">
+            <h2 className="font-serif text-4xl md:text-5xl text-[#0B0F17] mb-4">
+              Votre caisse à outils pour piloter vos opérations.
+            </h2>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              Une suite complète pour piloter vos opérations, du terrain au bureau, seul ou en équipe.
+            </p>
+          </div>
           
-          <div className="grid md:grid-cols-3 gap-6">
-            {/* Carte 1 : CR Automatique */}
-            <div className="bg-white border border-gray-200 rounded-lg p-8 hover:shadow-lg transition-shadow">
-              <div className="mb-6">
-                <Mic className="w-10 h-10 text-[#0B0F17] mb-4" />
-                <h3 className="font-serif text-2xl text-[#0B0F17] mb-3">
-                  CR Automatique
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Carte 1 : Générateur de Rapports (Haut Gauche) */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-lg hover:shadow-xl transition-shadow">
+              {/* En-tête horizontal : Icône + Titre */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <FileText className="w-6 h-6 text-blue-600" />
+                </div>
+                <h3 className="font-sans text-xl font-bold text-gray-900">
+                  Générateur de Rapports
                 </h3>
-                <p className="text-gray-600 text-sm leading-relaxed">
-                  Vous parlez, il rédige. Transformez vos notes vocales en comptes-rendus professionnels en quelques secondes.
-                </p>
               </div>
+              <p className="text-gray-600 text-base leading-relaxed">
+                Comptes-rendus, courriers... Transformez vos notes ou votre voix en documents pro instantanément.
+              </p>
             </div>
 
-            {/* Carte 2 : Expert Technique/RAG */}
-            <div className="bg-white border border-gray-200 rounded-lg p-8 hover:shadow-lg transition-shadow">
-              <div className="mb-6">
-                <Shield className="w-10 h-10 text-[#0B0F17] mb-4" />
-                <h3 className="font-serif text-2xl text-[#0B0F17] mb-3">
-                  Expert Technique
+            {/* Carte 2 : Moteur de Recherche (Haut Droite) */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-lg hover:shadow-xl transition-shadow">
+              {/* En-tête horizontal : Icône + Titre */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-amber-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Search className="w-6 h-6 text-amber-600" />
+                </div>
+                <h3 className="font-sans text-xl font-bold text-gray-900">
+                  Moteur de Recherche
                 </h3>
-                <p className="text-gray-600 text-sm leading-relaxed">
-                  Vos plans + Les Normes. Accédez instantanément aux DTU, normes NF et réglementations depuis vos documents.
-                </p>
               </div>
+              <p className="text-gray-600 text-base leading-relaxed">
+                CCTP, DTU, Devis... Une question ? Arpet scanne toute votre base documentaire.
+              </p>
             </div>
 
-            {/* Carte 3 : Dictée Terrain */}
-            <div className="bg-white border border-gray-200 rounded-lg p-8 hover:shadow-lg transition-shadow">
-              <div className="mb-6">
-                <FileText className="w-10 h-10 text-[#0B0F17] mb-4" />
-                <h3 className="font-serif text-2xl text-[#0B0F17] mb-3">
-                  Dictée Terrain
+            {/* Carte 3 : Capture Terrain (Bas Gauche) */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-lg hover:shadow-xl transition-shadow">
+              {/* En-tête horizontal : Icône + Titre */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center flex-shrink-0 relative">
+                  <Mic className="w-6 h-6 text-green-600 z-10" />
+                  {/* Onde sonore abstraite */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-10 h-10 border-2 border-green-200 rounded-full opacity-50"></div>
+                  </div>
+                </div>
+                <h3 className="font-sans text-xl font-bold text-gray-900">
+                  Capture Terrain
                 </h3>
-                <p className="text-gray-600 text-sm leading-relaxed">
-                  Notez vos observations directement sur le chantier. Transcription instantanée, même dans le bruit.
-                </p>
               </div>
+              <p className="text-gray-600 text-base leading-relaxed">
+                Dictée vocale, photos... Ne perdez plus aucune information captée sur le vif.
+              </p>
+            </div>
+
+            {/* Carte 4 : Travail Collaboratif (Bas Droite) */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-lg hover:shadow-xl transition-shadow">
+              {/* En-tête horizontal : Icône + Titre */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-indigo-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Users className="w-6 h-6 text-indigo-600" />
+                </div>
+                <h3 className="font-sans text-xl font-bold text-gray-900">
+                  Travail Collaboratif
+                </h3>
+              </div>
+              <p className="text-gray-600 text-base leading-relaxed">
+                Partagez la connaissance. Unifiez les bases et collaborez sur les dossiers en temps réel.
+              </p>
             </div>
           </div>
         </div>
