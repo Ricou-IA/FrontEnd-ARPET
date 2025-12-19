@@ -24,7 +24,6 @@ import {
   getFileIcon, 
   formatFileSize,
   getPromotionBadge,
-  isEmojiIcon,
   type SourceFile,
   type ViewerDocument
 } from '@/types'
@@ -199,25 +198,25 @@ export function DocumentRow({ document }: DocumentRowProps) {
       case 'pending':
         return (
           <span title="En attente">
-            <Clock className="w-3.5 h-3.5 text-orange-500" />
+            <Clock className="w-3.5 h-3.5 text-gray-400" />
           </span>
         )
       case 'processing':
         return (
           <span title="En cours">
-            <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin" />
+            <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin" />
           </span>
         )
       case 'completed':
         return (
           <span title="Traité">
-            <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+            <CheckCircle className="w-3.5 h-3.5 text-gray-600" />
           </span>
         )
       case 'error':
         return (
           <span title={document.processing_error || 'Erreur'}>
-            <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+            <AlertCircle className="w-3.5 h-3.5 text-gray-600" />
           </span>
         )
       default:
@@ -225,15 +224,10 @@ export function DocumentRow({ document }: DocumentRowProps) {
     }
   }
 
-  const getCategoryIcon = () => {
-    if (!categoryConfig?.icon) return '📄'
-    return isEmojiIcon(categoryConfig.icon) ? categoryConfig.icon : '📄'
-  }
-
   // Mode édition
   if (isEditing) {
     return (
-      <tr className="bg-blue-50 dark:bg-blue-900/20">
+      <tr className="bg-gray-50">
         <td className="py-3">
           <span className="text-xl">{getFileIcon(document.mime_type)}</span>
         </td>
@@ -242,14 +236,14 @@ export function DocumentRow({ document }: DocumentRowProps) {
             type="text"
             value={editFilename}
             onChange={(e) => setEditFilename(e.target.value)}
-            className="w-full px-2 py-1.5 text-sm bg-white dark:bg-stone-800 border border-stone-300 dark:border-stone-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-600 text-stone-800 dark:text-stone-200"
+            className="w-full px-2 py-1.5 text-sm bg-white border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-300 text-[#0B0F17]"
           />
         </td>
         <td className="py-3 px-2">
           <select
             value={editProjectId || ''}
             onChange={(e) => setEditProjectId(e.target.value || null)}
-            className="w-full px-1 py-1.5 text-xs bg-white dark:bg-stone-800 border border-stone-300 dark:border-stone-600 rounded text-stone-800 dark:text-stone-200"
+            className="w-full px-1 py-1.5 text-xs bg-white border border-gray-300 rounded text-[#0B0F17]"
           >
             <option value="">Aucun</option>
             {userProjects.map(p => (
@@ -261,7 +255,7 @@ export function DocumentRow({ document }: DocumentRowProps) {
           <select
             value={editCategoryId}
             onChange={(e) => setEditCategoryId(e.target.value)}
-            className="w-full px-1 py-1.5 text-xs bg-white dark:bg-stone-800 border border-stone-300 dark:border-stone-600 rounded text-stone-800 dark:text-stone-200"
+            className="w-full px-1 py-1.5 text-xs bg-white border border-gray-300 rounded text-[#0B0F17]"
           >
             <option value="">Aucune</option>
             {availableCategories.map(c => (
@@ -274,14 +268,14 @@ export function DocumentRow({ document }: DocumentRowProps) {
             <button
               onClick={handleSaveEdit}
               disabled={isSaving}
-              className="p-1.5 text-green-600 hover:bg-green-100 dark:hover:bg-green-900/30 rounded"
+              className="p-1.5 text-[#0B0F17] hover:bg-gray-100 rounded"
             >
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
             </button>
             <button
               onClick={resetForm}
               disabled={isSaving}
-              className="p-1.5 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
+              className="p-1.5 text-gray-500 hover:bg-gray-100 rounded"
             >
               <X className="w-4 h-4" />
             </button>
@@ -293,41 +287,40 @@ export function DocumentRow({ document }: DocumentRowProps) {
 
   // Mode affichage
   return (
-    <tr className="hover:bg-stone-50 dark:hover:bg-stone-800/50 transition group border-b border-stone-50 dark:border-stone-800/50">
+    <tr className="hover:bg-gray-50 transition group">
       <td className="py-3">
         <span className="text-xl">{getFileIcon(document.mime_type)}</span>
       </td>
       
       <td className="py-3 px-2">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-sm font-medium text-stone-800 dark:text-stone-200 truncate">
+          <span className="text-sm font-medium text-[#0B0F17] truncate">
             {document.original_filename}
           </span>
           <ProcessingIcon />
           {promotionBadge && (
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${promotionBadge.bgColor} ${promotionBadge.color}`}>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-md flex-shrink-0 bg-gray-100 text-gray-700 border border-gray-200">
               {promotionBadge.label}
             </span>
           )}
         </div>
-        <div className="text-xs text-stone-400 dark:text-stone-500">
+        <div className="text-xs text-gray-500">
           {formatFileSize(document.file_size)}
           {document.chunk_count > 0 && ` • ${document.chunk_count} chunks`}
         </div>
       </td>
       
-      <td className="py-3 px-2 text-xs text-stone-500 dark:text-stone-400 whitespace-nowrap">
+      <td className="py-3 px-2 text-xs text-gray-500 whitespace-nowrap">
         {formattedDate}
       </td>
       
       <td className="py-3 px-2">
         {categoryConfig ? (
-          <div className="flex items-center gap-1 text-xs text-stone-500 dark:text-stone-400" title={categoryConfig.label}>
-            <span>{getCategoryIcon()}</span>
+          <div className="flex items-center gap-1 text-xs text-gray-500" title={categoryConfig.label}>
             <span className="truncate">{categoryConfig.label}</span>
           </div>
         ) : (
-          <span className="text-xs text-stone-400">—</span>
+          <span className="text-xs text-gray-400">—</span>
         )}
       </td>
       
@@ -337,7 +330,7 @@ export function DocumentRow({ document }: DocumentRowProps) {
           <button 
             onClick={handleView} 
             disabled={isLoadingUrl || !document.storage_path}
-            className="p-1.5 text-stone-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded disabled:opacity-40 disabled:cursor-not-allowed" 
+            className="p-1.5 text-gray-500 hover:text-[#0B0F17] hover:bg-gray-100 rounded disabled:opacity-40 disabled:cursor-not-allowed" 
             title="Voir"
           >
             {isLoadingUrl ? (
@@ -351,7 +344,7 @@ export function DocumentRow({ document }: DocumentRowProps) {
             <button 
               onClick={handleDownload} 
               disabled={!document.storage_path}
-              className="p-1.5 text-stone-500 hover:text-stone-700 hover:bg-stone-100 dark:hover:bg-stone-700 rounded disabled:opacity-40 disabled:cursor-not-allowed" 
+              className="p-1.5 text-gray-500 hover:text-[#0B0F17] hover:bg-gray-100 rounded disabled:opacity-40 disabled:cursor-not-allowed" 
               title="Télécharger"
             >
               <Download className="w-4 h-4" />
@@ -359,19 +352,19 @@ export function DocumentRow({ document }: DocumentRowProps) {
           )}
           
           {documentsActiveLayer === 'user' && (
-            <button onClick={() => setIsEditing(true)} className="p-1.5 text-stone-500 hover:text-blue-600 hover:bg-blue-50 rounded" title="Modifier">
+            <button onClick={() => setIsEditing(true)} className="p-1.5 text-gray-500 hover:text-[#0B0F17] hover:bg-gray-100 rounded" title="Modifier">
               <Pencil className="w-4 h-4" />
             </button>
           )}
           
           {layerConfig.canPromote && document.promotion_status === 'draft' && (
-            <button onClick={handlePromote} disabled={isPromoting} className="p-1.5 text-stone-500 hover:text-green-600 hover:bg-green-50 rounded" title="Proposer">
+            <button onClick={handlePromote} disabled={isPromoting} className="p-1.5 text-gray-500 hover:text-[#0B0F17] hover:bg-gray-100 rounded" title="Proposer">
               {isPromoting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
             </button>
           )}
           
           {layerConfig.canDelete && (
-            <button onClick={handleDelete} disabled={isDeleting} className="p-1.5 text-stone-500 hover:text-red-600 hover:bg-red-50 rounded" title="Supprimer">
+            <button onClick={handleDelete} disabled={isDeleting} className="p-1.5 text-gray-500 hover:text-[#0B0F17] hover:bg-gray-100 rounded" title="Supprimer">
               {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
             </button>
           )}

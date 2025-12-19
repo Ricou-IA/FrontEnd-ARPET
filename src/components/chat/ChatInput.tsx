@@ -5,11 +5,11 @@
 // ============================================================
 
 import { useState, useRef, KeyboardEvent } from 'react'
-import { Paperclip, Send, Mic } from 'lucide-react'
+import { Paperclip, Send, Mic, Sparkles } from 'lucide-react'
 import { DictationModal } from '@/components/dictation'
 
 interface ChatInputProps {
-  onSendMessage: (content: string, files?: File[]) => void
+  onSendMessage: (content: string, files?: File[], deepAnalysis?: boolean) => void
   disabled?: boolean
   placeholder?: string
 }
@@ -22,17 +22,20 @@ export function ChatInput({
   const [content, setContent] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [showDictationModal, setShowDictationModal] = useState(false)
+  const [isDeepAnalysis, setIsDeepAnalysis] = useState(false)
   
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const expertFileInputRef = useRef<HTMLInputElement>(null)
+  const standardFileInputRef = useRef<HTMLInputElement>(null)
 
   const handleSubmit = () => {
     if (!content.trim() && files.length === 0) return
     if (disabled) return
 
-    onSendMessage(content.trim(), files.length > 0 ? files : undefined)
+    onSendMessage(content.trim(), files.length > 0 ? files : undefined, isDeepAnalysis)
     setContent('')
     setFiles([])
+    setIsDeepAnalysis(false)
     
     // Reset textarea height
     if (textareaRef.current) {
@@ -48,13 +51,22 @@ export function ChatInput({
     }
   }
 
-  const handleFileSelect = () => {
-    fileInputRef.current?.click()
+  const handleExpertFileSelect = () => {
+    setIsDeepAnalysis(true)
+    expertFileInputRef.current?.click()
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleStandardFileSelect = () => {
+    setIsDeepAnalysis(false)
+    standardFileInputRef.current?.click()
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, isExpert: boolean) => {
     const selectedFiles = Array.from(e.target.files || [])
     setFiles(prev => [...prev, ...selectedFiles])
+    if (isExpert) {
+      setIsDeepAnalysis(true)
+    }
     // Reset input
     e.target.value = ''
   }
@@ -82,7 +94,7 @@ export function ChatInput({
 
   return (
     <>
-      <div className="chat-container bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 shadow-sm rounded-xl p-4 flex flex-col gap-3">
+      <div className="chat-container bg-transparent border-0 shadow-none rounded-none p-0 flex flex-col gap-3">
         {/* Zone de texte */}
         <textarea 
           ref={textareaRef}
@@ -119,13 +131,23 @@ export function ChatInput({
         {/* Barre d'actions */}
         <div className="flex justify-between items-center border-t border-stone-50 dark:border-stone-800 pt-3">
           {/* Boutons gauche */}
-          <div className="flex items-center gap-1">
-            {/* Bouton joindre fichier */}
+          <div className="flex items-center gap-2">
+            {/* Bouton Expert - Analyse approfondie */}
             <button 
-              onClick={handleFileSelect}
+              onClick={handleExpertFileSelect}
               disabled={disabled}
-              className="p-2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 rounded-lg transition disabled:opacity-50"
-              title="Joindre un fichier"
+              className="p-2 text-amber-500 hover:text-amber-600 dark:hover:text-amber-400 rounded-lg transition disabled:opacity-50"
+              title="Analyser et Indexer (CCTP, Normes...)"
+            >
+              <Sparkles className="w-4.5 h-4.5" />
+            </button>
+
+            {/* Bouton Standard - Upload simple */}
+            <button 
+              onClick={handleStandardFileSelect}
+              disabled={disabled}
+              className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg transition disabled:opacity-50"
+              title="Joindre simplement"
             >
               <Paperclip className="w-4.5 h-4.5" />
             </button>
@@ -141,12 +163,20 @@ export function ChatInput({
             </button>
           </div>
 
-          {/* Input file caché */}
+          {/* Inputs file cachés */}
           <input 
-            ref={fileInputRef}
+            ref={expertFileInputRef}
             type="file"
             multiple
-            onChange={handleFileChange}
+            onChange={(e) => handleFileChange(e, true)}
+            className="hidden"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
+          />
+          <input 
+            ref={standardFileInputRef}
+            type="file"
+            multiple
+            onChange={(e) => handleFileChange(e, false)}
             className="hidden"
             accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
           />

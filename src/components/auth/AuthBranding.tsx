@@ -1,41 +1,41 @@
-// ============================================================
-// ARPET - AuthBranding Component (Factorisé)
-// Version: 1.0.0 - Logo + Tagline réutilisable
-// ============================================================
-
+// src/components/auth/AuthBranding.tsx
 import { PlumbBob } from './PlumbBob'
 
 export function AuthBranding() {
   return (
-    <div className="w-full md:w-5/12 p-12 flex flex-col justify-center items-center relative text-center bg-gray-50 border-r border-gray-100 overflow-hidden">
-      {/* Motif subtil de fond */}
-      <div 
-        className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-[0.02]"
-        style={{
-          backgroundImage: 'radial-gradient(#1F2937 1px, transparent 1px)',
-          backgroundSize: '16px 16px'
-        }}
-      />
+    <div className="relative hidden w-1/2 flex-col items-center justify-center overflow-hidden bg-gray-50 md:flex rounded-l-[30px]">
       
-      {/* Logo + Fil à plomb */}
-      <div className="relative z-10 mb-8">
-        <h1 className="font-brand-bold text-6xl text-gray-900 tracking-tight relative inline-block">
+      {/* Pattern Quadrillé */}
+      <div className="absolute inset-0 bg-white bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
+
+      <div className="relative z-10 flex flex-col items-center text-center">
+        
+        {/* Titre avec le point d'ancrage */}
+        <h1 className="font-serif text-6xl font-bold text-[#0B0F17] tracking-tight mb-24">
           Arpet
-          <span className="relative inline-block">
+          <span className="relative inline-flex flex-col items-center">
             .
-            <PlumbBob />
+            {/* Le Fil à Plomb attaché au point */}
+            {/* AJUSTEMENT ICI : top-[80%] pour descendre le départ du fil */}
+            <div className="absolute top-[80%] left-[calc(50%-0.5px)] pointer-events-none">
+                {/* AJUSTEMENT ICI : h-[4rem] pour raccourcir le fil */}
+                <div className="w-px h-[4rem] bg-[#0B0F17] relative flex flex-col items-center">
+                  <div className="absolute bottom-0 translate-y-full">
+                    <PlumbBob />
+                  </div>
+                </div>
+            </div>
           </span>
         </h1>
-      </div>
 
-      {/* Tagline */}
-      <blockquote className="max-w-xs mx-auto z-10 relative mt-16">
-        <p className="font-brand text-2xl text-gray-800 leading-snug">
-          "Il cherche les réponses,
-          <br />
-          <span className="font-brand-bold text-black">vous prenez les décisions."</span>
-        </p>
-      </blockquote>
+        <div className="max-w-xs px-4">
+          <p className="font-serif text-2xl font-bold text-[#0B0F17] leading-tight">
+            "Il cherche les réponses,
+            <br />
+            vous prenez les décisions."
+          </p>
+        </div>
+      </div>
     </div>
   )
 }

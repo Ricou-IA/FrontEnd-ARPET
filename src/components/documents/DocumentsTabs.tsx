@@ -1,6 +1,6 @@
 // ============================================================
 // ARPET - DocumentsTabs Component
-// Version: 1.0.0 - Onglets navigation 4 couches documentaires
+// Version: 2.2.0 - Style High-End SaaS avec point actif
 // Date: 2025-12-18
 // ============================================================
 
@@ -17,8 +17,8 @@ export function DocumentsTabs({ counts }: DocumentsTabsProps) {
   const { documentsActiveLayer, setDocumentsActiveLayer } = useAppStore()
 
   return (
-    <div className="flex-shrink-0 border-b border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900">
-      <div className="flex px-6">
+    <div className="flex-shrink-0 bg-transparent">
+      <div className="flex px-6 gap-12">
         {LAYERS_ORDER.map((layer) => {
           const config = LAYER_CONFIG[layer]
           const isActive = documentsActiveLayer === layer
@@ -29,15 +29,17 @@ export function DocumentsTabs({ counts }: DocumentsTabsProps) {
               key={layer}
               onClick={() => setDocumentsActiveLayer(layer)}
               className={`
-                relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors
+                relative flex items-center gap-2 px-0 py-4 transition-colors
                 ${isActive 
-                  ? 'text-stone-800 dark:text-stone-100' 
-                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300'
+                  ? 'text-slate-900 font-medium text-lg pb-1 border-b-2 border-slate-900' 
+                  : 'text-gray-500 hover:text-gray-700 text-base font-medium'
                 }
               `}
             >
-              {/* Icône */}
-              <span className="text-base">{config.icon}</span>
+              {/* Point bleu marine pour l'actif */}
+              {isActive && (
+                <span className="w-1.5 h-1.5 rounded-full bg-[#0B0F17]"></span>
+              )}
               
               {/* Label */}
               <span>{config.label}</span>
@@ -45,19 +47,14 @@ export function DocumentsTabs({ counts }: DocumentsTabsProps) {
               {/* Badge count */}
               {count > 0 && (
                 <span className={`
-                  text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center
+                  text-[10px] font-medium px-1.5 py-0.5 rounded min-w-[20px] text-center
                   ${isActive 
-                    ? `${config.bgColor} ${config.color}` 
-                    : 'bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400'
+                    ? 'bg-slate-900 text-white' 
+                    : 'bg-gray-100 text-gray-500'
                   }
                 `}>
                   {count}
                 </span>
-              )}
-
-              {/* Indicateur actif */}
-              {isActive && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-stone-800 dark:bg-stone-200 rounded-t-full" />
               )}
             </button>
           )

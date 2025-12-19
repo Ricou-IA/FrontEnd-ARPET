@@ -9,8 +9,9 @@ export default {
     extend: {
       fontFamily: {
         'brand': ['Lora', 'serif'],
-        'serif': ['Instrument Serif', 'serif'],
+        'serif': ['Lora', 'serif'],
         'sans': ['Inter', 'sans-serif'],
+        'mono': ['IBM Plex Mono', 'monospace'],
       },
       colors: {
         'arpet': {

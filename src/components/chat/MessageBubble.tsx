@@ -45,7 +45,7 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
     return (
       <div className="flex gap-4 justify-end">
         <div className="max-w-2xl">
-          <div className="text-sm text-stone-700 dark:text-stone-200 leading-relaxed bg-stone-100 dark:bg-stone-800 p-4 rounded-l-xl rounded-br-xl">
+          <div className="text-sm font-sans text-stone-700 dark:text-stone-200 leading-relaxed bg-stone-100 dark:bg-stone-800 p-4 rounded-l-xl rounded-br-xl">
             <p className="whitespace-pre-wrap">{message.content}</p>
           </div>
         </div>
@@ -288,7 +288,7 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
           )}
 
           <div 
-            className="prose prose-sm prose-stone dark:prose-invert max-w-none"
+            className="prose prose-sm prose-stone dark:prose-invert max-w-none font-serif"
             dangerouslySetInnerHTML={{ __html: formatContent(message.content) }}
           />
 
