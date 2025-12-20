@@ -1,6 +1,7 @@
 /**
  * MeetingRecordModal - Phase 2.2
- * Modale principale d'enregistrement de réunion (orchestre les 3 étapes)
+ * Version: 2.0.0 - Suppression Sandbox, simplification
+ * Date: 2025-12-19
  */
 
 import { useState, useCallback } from 'react';
@@ -9,7 +10,6 @@ import { MeetingStep1Prepare } from './MeetingStep1Prepare';
 import { MeetingStep2Record } from './MeetingStep2Record';
 import { MeetingStep3Review } from './MeetingStep3Review';
 import { processAudio } from '../../services/meeting.service';
-import { useAppStore } from '../../stores/appStore';
 import type { 
   MeetingStep, 
   MeetingPrepareData, 
@@ -29,9 +29,6 @@ export function MeetingRecordModal({ isOpen, onClose }: MeetingRecordModalProps)
   const [processingStatus, setProcessingStatus] = useState<MeetingProcessingStatus>('idle');
   const [result, setResult] = useState<ProcessAudioResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // Store
-  const createSandboxItem = useAppStore((s) => s.createSandboxItem);
 
   // Reset state
   const resetState = useCallback(() => {
@@ -83,33 +80,11 @@ export function MeetingRecordModal({ isOpen, onClose }: MeetingRecordModalProps)
     setStep('prepare');
   }, []);
 
-  // Ajouter au Sandbox
-  const handleAddToSandbox = useCallback(async () => {
-    if (!result || !prepareData) return;
-
-    const crContent = `## Résumé\n${result.summary}\n\n## Points d'action\n${
-      result.action_items.map(item => `- [ ] ${item.what} (${item.who}${item.when ? ` - ${item.when}` : ''})`).join('\n')
-    }\n\n## Transcript\n${result.transcript}`;
-
-    await createSandboxItem({
-      title: `📹 ${prepareData.title}`,
-      content: {
-        objective: crContent,
-        initial_prompt: prepareData.title,
-        messages: [],
-        display: {
-          result_type: 'text',
-          result_data: result.summary,
-          last_run_at: new Date().toISOString(),
-        },
-        routine: null,
-        source_type: 'meeting_cr',
-        source_meeting_id: result.meeting_id,
-      },
-    });
-
+  // Fermer après review (pour l'instant, juste fermer)
+  // TODO: Implémenter la sauvegarde de conversation si nécessaire
+  const handleFinish = useCallback(() => {
     handleClose();
-  }, [result, prepareData, createSandboxItem, handleClose]);
+  }, [handleClose]);
 
   if (!isOpen) return null;
 
@@ -122,10 +97,10 @@ export function MeetingRecordModal({ isOpen, onClose }: MeetingRecordModalProps)
       />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="relative bg-white dark:bg-stone-900 rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200">
-          <h2 className="text-lg font-semibold text-stone-800">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 dark:border-stone-700">
+          <h2 className="text-lg font-semibold text-stone-800 dark:text-stone-200">
             {step === 'prepare' && '🎙️ Nouvelle réunion'}
             {step === 'record' && '🔴 Enregistrement'}
             {(step === 'processing' || step === 'review') && '📝 Compte-rendu'}
@@ -133,7 +108,7 @@ export function MeetingRecordModal({ isOpen, onClose }: MeetingRecordModalProps)
           {step !== 'record' && step !== 'processing' && (
             <button
               onClick={handleClose}
-              className="p-1.5 rounded-lg hover:bg-stone-100 transition-colors text-stone-500"
+              className="p-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors text-stone-500 dark:text-stone-400"
             >
               <X className="w-5 h-5" />
             </button>
@@ -163,7 +138,7 @@ export function MeetingRecordModal({ isOpen, onClose }: MeetingRecordModalProps)
               processingStatus={processingStatus}
               result={result}
               error={error}
-              onAddToSandbox={handleAddToSandbox}
+              onAddToSandbox={handleFinish}
               onClose={handleClose}
             />
           )}

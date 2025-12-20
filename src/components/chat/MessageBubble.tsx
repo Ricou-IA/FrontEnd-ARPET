@@ -1,13 +1,13 @@
 // ============================================================
 // ARPET - MessageBubble Component
-// Version: 5.2.0 - Utilisation source_file_id direct (plus de lookup chunk)
-// Date: 2025-12-18
+// Version: 6.0.0 - Suppression Sandbox, simplification
+// Date: 2025-12-19
 // ============================================================
 
 import { useState, useCallback } from 'react'
 import { 
-  Bookmark, Copy, ThumbsUp, ThumbsDown, Zap, Check, 
-  AlertCircle, ExternalLink, CheckCircle, Loader2, Eye 
+  Copy, ThumbsUp, ThumbsDown, Zap, Check, 
+  AlertCircle, CheckCircle, Loader2, Eye 
 } from 'lucide-react'
 import type { Message, MessageSource, ViewerDocument } from '../../types'
 import { getAuthorityBadge } from '../../types'
@@ -19,12 +19,10 @@ import { useAppStore } from '../../stores/appStore'
 
 interface MessageBubbleProps {
   message: Message
-  onAnchor?: (message: Message) => void
-  onOpenSandboxItem?: (sandboxItemId: string) => void
   onVoteComplete?: (message: Message, voteType: 'up' | 'down', qaId?: string) => void
 }
 
-export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComplete }: MessageBubbleProps) {
+export function MessageBubble({ message, onVoteComplete }: MessageBubbleProps) {
   const { profile } = useAuth()
   const { openViewer } = useAppStore()
   
@@ -34,9 +32,6 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
   const [voteError, setVoteError] = useState<string | null>(null)
   const [localValidationCount, setLocalValidationCount] = useState(message.validation_count || 0)
   const [copied, setCopied] = useState(false)
-  
-  const isAnchored = message.isAnchored || false
-  const sandboxItemId = message.sandboxItemId || null
 
   // ================================================================
   // MESSAGE UTILISATEUR
@@ -66,14 +61,6 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
       console.error('Erreur copie:', err)
     }
   }, [message.content])
-
-  const handleAnchorClick = useCallback(() => {
-    if (isAnchored && sandboxItemId && onOpenSandboxItem) {
-      onOpenSandboxItem(sandboxItemId)
-    } else if (!isAnchored && onAnchor) {
-      onAnchor(message)
-    }
-  }, [isAnchored, sandboxItemId, onOpenSandboxItem, onAnchor, message])
 
   const handleVoteUp = useCallback(async () => {
     if (isVoting || voteStatus !== 'none') return
@@ -311,25 +298,11 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
         <div className="flex items-center justify-between mt-2">
           <div className="flex gap-2">
             <button 
-              onClick={handleAnchorClick}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                isAnchored 
-                  ? 'bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/60' 
-                  : 'bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300'
-              }`}
-              title={isAnchored ? 'Ouvrir dans le Bac à Sable' : 'Ancrer dans le Bac à Sable'}
-            >
-              <Bookmark className={`w-3.5 h-3.5 ${isAnchored ? 'fill-current' : ''}`} />
-              {isAnchored ? 'Ancré' : 'Ancrer'}
-              {isAnchored && <ExternalLink className="w-3 h-3 ml-0.5" />}
-            </button>
-            
-            <button 
               onClick={handleCopy}
-              className={`p-1.5 rounded-full transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                 copied 
                   ? 'bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400' 
-                  : 'hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300'
+                  : 'bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300'
               }`}
               title={copied ? 'Copié !' : 'Copier'}
             >
@@ -338,6 +311,7 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
               ) : (
                 <Copy className="w-3.5 h-3.5" />
               )}
+              {copied ? 'Copié' : 'Copier'}
             </button>
           </div>
 
@@ -398,7 +372,6 @@ export function MessageBubble({ message, onAnchor, onOpenSandboxItem, onVoteComp
 
 // ============================================================
 // COMPOSANT SOURCE BADGE (avec bouton Voir)
-// v5.2.0: Utilisation source_file_id direct
 // ============================================================
 
 interface SourceBadgeProps {
@@ -412,7 +385,7 @@ function SourceBadge({ source, onOpenViewer }: SourceBadgeProps) {
   const isQAMemory = source.type === 'qa_memory'
   const authorityBadge = isQAMemory ? getAuthorityBadge(source.authority_label) : null
   
-  // v5.2.0: Utiliser source_file_id directement (ID du fichier dans sources.files)
+  // Utiliser source_file_id directement (ID du fichier dans sources.files)
   const sourceFileId = source.source_file_id
   const isDocument = !isQAMemory && sourceFileId
 
@@ -426,7 +399,7 @@ function SourceBadge({ source, onOpenViewer }: SourceBadgeProps) {
     setIsLoading(true)
     
     try {
-      // v5.2.0: Récupérer directement le fichier par son ID (pas de lookup via chunk)
+      // Récupérer directement le fichier par son ID
       const { data: file, error: fileError } = await getSourceFileById(sourceFileId)
       
       if (fileError || !file) {

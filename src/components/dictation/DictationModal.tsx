@@ -1,16 +1,13 @@
 // ============================================================
 // ARPET - DictationModal Component
-// Version: 1.0.4 - Titre avec date/heure + transcript dans messages
-// Date: 2025-12-18
+// Version: 2.0.0 - Suppression Sandbox, simplification
+// Date: 2025-12-19
 // ============================================================
 
 import { useState, useEffect, useCallback } from 'react'
-import { X, Mic, Square, Loader2, MessageSquare, Pin, AlertCircle, RotateCcw } from 'lucide-react'
+import { X, Mic, Square, Loader2, MessageSquare, AlertCircle, RotateCcw } from 'lucide-react'
 import { useAudioRecorder, formatDuration } from '@/hooks/useAudioRecorder'
 import { transcribeAudio, isAudioRecordingSupported } from '@/services/dictation.service'
-import { createSandboxItem } from '@/services/sandbox.service'
-import { createEmptySandboxContent } from '@/types'
-import { useAppStore } from '@/stores/appStore'
 
 // ============================================================
 // TYPES
@@ -26,23 +23,6 @@ interface DictationModalProps {
 }
 
 // ============================================================
-// HELPERS
-// ============================================================
-
-/**
- * Formate la date/heure pour le titre : "18-12-2025 à 15h30"
- */
-function formatDateTimeForTitle(date: Date): string {
-  const day = date.getDate().toString().padStart(2, '0')
-  const month = (date.getMonth() + 1).toString().padStart(2, '0')
-  const year = date.getFullYear()
-  const hours = date.getHours().toString().padStart(2, '0')
-  const minutes = date.getMinutes().toString().padStart(2, '0')
-  
-  return `${day}-${month}-${year} à ${hours}h${minutes}`
-}
-
-// ============================================================
 // COMPONENT
 // ============================================================
 
@@ -52,11 +32,7 @@ export function DictationModal({ isOpen, onClose, onSendToChat }: DictationModal
   const [transcript, setTranscript] = useState('')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isClosing, setIsClosing] = useState(false)
-  const [isSavingToSandbox, setIsSavingToSandbox] = useState(false)
   const [waitingForBlob, setWaitingForBlob] = useState(false)
-
-  // Store Zustand - pour rafraîchir le sandbox après création
-  const fetchSandboxItems = useAppStore((s) => s.fetchSandboxItems)
 
   // Hook d'enregistrement audio
   const {
@@ -166,55 +142,6 @@ export function DictationModal({ isOpen, onClose, onSendToChat }: DictationModal
     handleClose()
   }
 
-  const handleSaveToSandbox = async () => {
-    if (!transcript.trim() || isSavingToSandbox) return
-
-    setIsSavingToSandbox(true)
-
-    try {
-      const now = new Date()
-      
-      // ✅ Titre avec date/heure : "🎤 Audio du 18-12-2025 à 15h30"
-      const title = `🎤 Audio du ${formatDateTimeForTitle(now)}`
-
-      // Créer un item sandbox avec le transcript dans les messages
-      const content = createEmptySandboxContent(title, transcript.trim())
-      
-      const contentWithSource = {
-        ...content,
-        source_type: 'voice_note' as const,
-        initial_prompt: transcript.trim(),
-        // ✅ Transcript complet comme premier message
-        messages: [
-          {
-            role: 'user' as const,
-            text: transcript.trim(),
-            at: now.toISOString(),
-          }
-        ],
-      }
-
-      const result = await createSandboxItem({
-        title,
-        content: contentWithSource,
-      })
-
-      if (result.data) {
-        // ✅ Rafraîchir la liste du sandbox dans le store
-        await fetchSandboxItems()
-        // Succès - fermer la modale
-        handleClose()
-      } else {
-        throw new Error('Erreur lors de la sauvegarde')
-      }
-    } catch (error) {
-      console.error('Erreur sauvegarde sandbox:', error)
-      setErrorMessage('Erreur lors de la sauvegarde dans le Sandbox')
-    } finally {
-      setIsSavingToSandbox(false)
-    }
-  }
-
   // ============================================================
   // RENDER HELPERS
   // ============================================================
@@ -307,29 +234,15 @@ export function DictationModal({ isOpen, onClose, onSendToChat }: DictationModal
         </span>
       </div>
 
-      {/* Actions */}
-      <div className="flex gap-3">
-        <button
-          onClick={handleSendToChat}
-          disabled={!transcript.trim()}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 rounded-xl hover:bg-stone-200 dark:hover:bg-stone-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <MessageSquare className="w-4 h-4" />
-          Poser au RAG
-        </button>
-        <button
-          onClick={handleSaveToSandbox}
-          disabled={!transcript.trim() || isSavingToSandbox}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-800 rounded-xl hover:bg-stone-900 dark:hover:bg-stone-300 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isSavingToSandbox ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Pin className="w-4 h-4" />
-          )}
-          Ajouter au Sandbox
-        </button>
-      </div>
+      {/* Action */}
+      <button
+        onClick={handleSendToChat}
+        disabled={!transcript.trim()}
+        className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-800 rounded-xl hover:bg-stone-900 dark:hover:bg-stone-300 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <MessageSquare className="w-4 h-4" />
+        Envoyer au Chat
+      </button>
 
       {/* Bouton recommencer */}
       <button

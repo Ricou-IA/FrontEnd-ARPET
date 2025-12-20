@@ -1,22 +1,22 @@
 // ============================================================
 // ARPET - App Store (Zustand)
-// Version: 4.5.0 - Ajout state Viewer (Split View)
-// Date: 2025-12-18
+// Version: 5.0.0 - Suppression Sandbox, ajout Conversations
+// Date: 2025-12-19
 // ============================================================
 
 import { create } from 'zustand'
 import type { 
   Message, 
   Project, 
-  SandboxItem, 
-  SandboxItemCreate,
   SourceFile,
   DocumentLayer,
   DocumentCategoryConfig,
-  ViewerDocument
+  ViewerDocument,
+  SavedConversation,
+  SavedConversationCreate
 } from '../types'
-import * as sandboxService from '../services/sandbox.service'
 import * as documentsService from '../services/documents.service'
+import * as conversationsService from '../services/conversations.service'
 
 interface AppState {
   // ========================================
@@ -38,7 +38,7 @@ interface AppState {
   messages: Message[]
   addMessage: (message: Message) => void
   clearMessages: () => void
-  setMessageAnchored: (messageId: string) => void
+  setMessages: (messages: Message[]) => void
   
   // ========================================
   // AGENT
@@ -47,21 +47,17 @@ interface AppState {
   setIsAgentTyping: (typing: boolean) => void
   
   // ========================================
-  // SANDBOX
+  // CONVERSATIONS SAUVEGARDÉES
   // ========================================
-  sandboxItems: SandboxItem[]
-  sandboxLoading: boolean
-  sandboxError: Error | null
-  sandboxCreating: boolean
+  savedConversations: SavedConversation[]
+  savedConversationsLoading: boolean
+  savedConversationsError: Error | null
   
-  fetchSandboxItems: () => Promise<void>
-  createSandboxItem: (input: SandboxItemCreate) => Promise<SandboxItem | null>
-  deleteSandboxItem: (id: string) => Promise<boolean>
-  pinSandboxItem: (id: string) => Promise<SandboxItem | null>
-  unpinSandboxItem: (id: string) => Promise<SandboxItem | null>
-  archiveSandboxItem: (id: string) => Promise<SandboxItem | null>
-  clearSandboxError: () => void
-  resetSandboxCreating: () => void
+  fetchSavedConversations: () => Promise<void>
+  saveConversation: (input: SavedConversationCreate) => Promise<SavedConversation | null>
+  deleteSavedConversation: (id: string) => Promise<boolean>
+  loadConversation: (conversation: SavedConversation) => void
+  clearSavedConversationsError: () => void
   
   // ========================================
   // DOCUMENTS (sources.files)
@@ -139,11 +135,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     messages: [...state.messages, message] 
   })),
   clearMessages: () => set({ messages: [] }),
-  setMessageAnchored: (messageId) => set((state) => ({
-    messages: state.messages.map((m) =>
-      m.id === messageId ? { ...m, isAnchored: true } : m
-    )
-  })),
+  setMessages: (messages) => set({ messages }),
   
   // ========================================
   // AGENT
@@ -152,189 +144,91 @@ export const useAppStore = create<AppState>((set, get) => ({
   setIsAgentTyping: (typing) => set({ isAgentTyping: typing }),
   
   // ========================================
-  // SANDBOX - State
+  // CONVERSATIONS SAUVEGARDÉES - State
   // ========================================
-  sandboxItems: [],
-  sandboxLoading: false,
-  sandboxError: null,
-  sandboxCreating: false,
+  savedConversations: [],
+  savedConversationsLoading: false,
+  savedConversationsError: null,
   
   // ========================================
-  // SANDBOX - Actions
+  // CONVERSATIONS SAUVEGARDÉES - Actions
   // ========================================
   
-  fetchSandboxItems: async () => {
+  fetchSavedConversations: async () => {
     const state = get()
-    if (state.sandboxLoading) {
-      console.log('⚠️ Fetch already in progress, skipping')
+    if (state.savedConversationsLoading) {
+      console.log('⚠️ Conversations fetch already in progress')
       return
     }
     
-    set({ sandboxLoading: true, sandboxError: null })
+    set({ savedConversationsLoading: true, savedConversationsError: null })
     
     try {
-      const { data, error } = await sandboxService.getSandboxItems()
+      const { data, error } = await conversationsService.getSavedConversations()
       
       if (error) throw error
       
-      set({ sandboxItems: data || [], sandboxLoading: false })
-      console.log('✅ Sandbox items loaded:', data?.length || 0)
+      set({ savedConversations: data || [], savedConversationsLoading: false })
+      console.log('✅ Saved conversations loaded:', data?.length || 0)
     } catch (err) {
-      console.error('❌ Fetch error:', err)
-      set({ sandboxError: err as Error, sandboxLoading: false })
+      console.error('❌ Fetch conversations error:', err)
+      set({ savedConversationsError: err as Error, savedConversationsLoading: false })
     }
   },
   
-  createSandboxItem: async (input) => {
-    const state = get()
-    if (state.sandboxCreating) {
-      console.log('⚠️ Creation already in progress, blocked')
-      return null
-    }
-    
-    set({ sandboxCreating: true, sandboxError: null })
-    console.log('➕ Creating sandbox item...')
+  saveConversation: async (input) => {
+    set({ savedConversationsError: null })
+    console.log('💾 Saving conversation:', input.title)
     
     try {
-      const { data, error } = await sandboxService.createSandboxItem(input)
+      const { data, error } = await conversationsService.createSavedConversation(input)
       
       if (error) throw error
       
       if (data) {
-        const currentItems = get().sandboxItems
-        const exists = currentItems.some(item => item.id === data.id)
-        
-        if (exists) {
-          console.log('⚠️ Item already exists, updating')
-          set({
-            sandboxItems: currentItems.map(item => 
-              item.id === data.id ? data : item
-            ),
-            sandboxCreating: false
-          })
-        } else {
-          set({ 
-            sandboxItems: [data, ...currentItems],
-            sandboxCreating: false
-          })
-        }
-        
-        console.log('✅ Created:', data.id)
+        set((state) => ({ 
+          savedConversations: [data, ...state.savedConversations]
+        }))
+        console.log('✅ Conversation saved:', data.id)
         return data
       }
       
-      console.log('⚠️ No data returned from create')
-      set({ sandboxCreating: false })
       return null
-      
     } catch (err) {
-      console.error('❌ Create error:', err)
-      set({ sandboxError: err as Error, sandboxCreating: false })
+      console.error('❌ Save conversation error:', err)
+      set({ savedConversationsError: err as Error })
       return null
     }
   },
   
-  deleteSandboxItem: async (id) => {
-    set({ sandboxError: null })
-    console.log('🗑️ Deleting:', id)
+  deleteSavedConversation: async (id) => {
+    set({ savedConversationsError: null })
+    console.log('🗑️ Deleting conversation:', id)
     
     try {
-      const { error } = await sandboxService.deleteSandboxItem(id)
+      const { error } = await conversationsService.deleteSavedConversation(id)
       
       if (error) throw error
       
       set((state) => ({ 
-        sandboxItems: state.sandboxItems.filter(item => item.id !== id) 
+        savedConversations: state.savedConversations.filter(c => c.id !== id) 
       }))
-      console.log('✅ Deleted:', id)
+      console.log('✅ Conversation deleted:', id)
       return true
     } catch (err) {
-      console.error('❌ Delete error:', err)
-      set({ sandboxError: err as Error })
+      console.error('❌ Delete conversation error:', err)
+      set({ savedConversationsError: err as Error })
       return false
     }
   },
   
-  pinSandboxItem: async (id) => {
-    set({ sandboxError: null })
-    console.log('📌 Pinning:', id)
-    
-    try {
-      const { data, error } = await sandboxService.pinSandboxItem(id)
-      
-      if (error) throw error
-      
-      if (data) {
-        set((state) => ({
-          sandboxItems: state.sandboxItems.map(item => 
-            item.id === id ? data : item
-          )
-        }))
-        console.log('✅ Pinned:', id)
-      }
-      
-      return data
-    } catch (err) {
-      console.error('❌ Pin error:', err)
-      set({ sandboxError: err as Error })
-      return null
-    }
+  loadConversation: (conversation) => {
+    console.log('📂 Loading conversation:', conversation.title)
+    // Charger les messages dans le chat
+    set({ messages: conversation.messages })
   },
   
-  unpinSandboxItem: async (id) => {
-    set({ sandboxError: null })
-    console.log('📍 Unpinning:', id)
-    
-    try {
-      const { data, error } = await sandboxService.unpinSandboxItem(id)
-      
-      if (error) throw error
-      
-      if (data) {
-        set((state) => ({
-          sandboxItems: state.sandboxItems.map(item => 
-            item.id === id ? data : item
-          )
-        }))
-      }
-      
-      return data
-    } catch (err) {
-      console.error('❌ Unpin error:', err)
-      set({ sandboxError: err as Error })
-      return null
-    }
-  },
-  
-  archiveSandboxItem: async (id) => {
-    set({ sandboxError: null })
-    console.log('🗃️ Archiving:', id)
-    
-    try {
-      const { data, error } = await sandboxService.archiveSandboxItem(id)
-      
-      if (error) throw error
-      
-      if (data) {
-        set((state) => ({
-          sandboxItems: state.sandboxItems.filter(item => item.id !== id)
-        }))
-      }
-      
-      return data
-    } catch (err) {
-      console.error('❌ Archive error:', err)
-      set({ sandboxError: err as Error })
-      return null
-    }
-  },
-  
-  clearSandboxError: () => set({ sandboxError: null }),
-  
-  resetSandboxCreating: () => {
-    console.log('🔄 Manual reset of sandboxCreating')
-    set({ sandboxCreating: false })
-  },
+  clearSavedConversationsError: () => set({ savedConversationsError: null }),
 
   // ========================================
   // DOCUMENTS - State

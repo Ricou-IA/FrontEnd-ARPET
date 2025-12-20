@@ -1,21 +1,23 @@
 // ============================================================
 // ARPET - ChatInput Component
-// Version: 2.0.0 - Ajout bouton dictée rapide
-// Date: 2025-12-18
+// Version: 3.1.0 - Entrée pour envoyer, Shift+Entrée pour nouvelle ligne
+// Date: 2025-12-20
 // ============================================================
 
 import { useState, useRef, KeyboardEvent } from 'react'
-import { Paperclip, Send, Mic, Sparkles } from 'lucide-react'
+import { Paperclip, Send, Mic, Sparkles, Save } from 'lucide-react'
 import { DictationModal } from '@/components/dictation'
 
 interface ChatInputProps {
   onSendMessage: (content: string, files?: File[], deepAnalysis?: boolean) => void
+  onSaveConversation?: () => void
   disabled?: boolean
   placeholder?: string
 }
 
 export function ChatInput({ 
-  onSendMessage, 
+  onSendMessage,
+  onSaveConversation,
   disabled = false,
   placeholder = "De quoi avez-vous besoin ?..." 
 }: ChatInputProps) {
@@ -44,8 +46,9 @@ export function ChatInput({
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    // Envoyer avec Ctrl+Enter ou Cmd+Enter
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    // Entrée seule = envoyer le message
+    // Shift+Entrée = nouvelle ligne
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSubmit()
     }
@@ -161,6 +164,23 @@ export function ChatInput({
             >
               <Mic className="w-4.5 h-4.5" />
             </button>
+
+            {/* Séparateur vertical */}
+            {onSaveConversation && (
+              <div className="h-5 w-px bg-stone-200 dark:bg-stone-700 mx-1" />
+            )}
+
+            {/* Bouton sauvegarder conversation */}
+            {onSaveConversation && (
+              <button 
+                onClick={onSaveConversation}
+                disabled={disabled}
+                className="p-2 text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 rounded-lg transition disabled:opacity-50"
+                title="Sauvegarder la conversation"
+              >
+                <Save className="w-4.5 h-4.5" />
+              </button>
+            )}
           </div>
 
           {/* Inputs file cachés */}
@@ -194,7 +214,7 @@ export function ChatInput({
 
         {/* Hint */}
         <p className="text-[10px] text-stone-400 dark:text-stone-500 text-right -mt-1">
-          Ctrl+Entrée pour envoyer
+          Shift+Entrée pour nouvelle ligne
         </p>
       </div>
 

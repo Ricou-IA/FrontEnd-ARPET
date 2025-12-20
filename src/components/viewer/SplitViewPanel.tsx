@@ -1,7 +1,7 @@
 // ============================================================
 // ARPET - SplitViewPanel Component
-// Version: 1.3.0 - Refactoring et factorisation
-// Date: 2025-12-19
+// Version: 2.0.0 - Support scroll continu PDF (toutes les pages)
+// Date: 2025-12-20
 // ============================================================
 
 import { useEffect, useCallback, useMemo } from 'react'
@@ -65,7 +65,7 @@ export function SplitViewPanel() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [viewerOpen, closeViewer])
 
-  // Handlers navigation
+  // Handlers navigation (pour scroll vers une page via toolbar)
   const handlePrevPage = useCallback(() => {
     if (viewerCurrentPage > 1) {
       setViewerPage(viewerCurrentPage - 1)
@@ -77,6 +77,11 @@ export function SplitViewPanel() {
       setViewerPage(viewerCurrentPage + 1)
     }
   }, [viewerCurrentPage, viewerTotalPages, setViewerPage])
+
+  // Handler pour mise à jour de la page visible (depuis PdfViewer)
+  const handlePageChange = useCallback((page: number) => {
+    setViewerPage(page)
+  }, [setViewerPage])
 
   // Handlers zoom (factorisés)
   const handleZoomChange = useCallback((delta: number) => {
@@ -117,6 +122,7 @@ export function SplitViewPanel() {
           currentPage={viewerCurrentPage}
           onLoadSuccess={handlePdfLoadSuccess}
           onLoadError={handlePdfLoadError}
+          onPageChange={handlePageChange}
         />
       )
     }
@@ -171,7 +177,12 @@ export function SplitViewPanel() {
         onClose={closeViewer}
       />
 
-      <div className="flex-1 overflow-hidden relative">
+      {/* 
+        Conteneur du viewer
+        - min-h-0 : permet au flex item de shrink (essentiel pour le scroll)
+        - Le PdfViewer gère son propre scroll avec overflow-auto
+      */}
+      <div className="flex-1 min-h-0">
         {renderViewerContent()}
       </div>
     </div>

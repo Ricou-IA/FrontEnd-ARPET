@@ -1,22 +1,20 @@
 // ============================================================
 // ARPET - Sidebar Component
-// Version: 3.4.0 - Simplification navigation (suppression Contexte)
+// Version: 4.0.0 - Suppression Sandbox, ajout Discussions
 // Date: 2025-12-19
 // ============================================================
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { 
   ChevronLeft, ChevronRight, LogOut,
-  Book, BarChart3, FolderOpen, MessageSquare, Video
+  FolderOpen, MessageSquare, Video, Trash2
 } from 'lucide-react'
 import { useAppStore } from '../../stores/appStore'
 import { useAuth } from '../../hooks/useAuth'
 import { ProjectSelector } from '../ui/ProjectSelector'
-import { useSandboxItems } from '@/hooks/useSandbox'
-import { SandboxEditor } from '../sandbox/SandboxEditor'
 import { MeetingRecordModal } from '../meeting'
-import type { Project, SandboxItem } from '../../types'
+import type { Project, SavedConversation } from '../../types'
 
 interface SidebarProps {
   projects: Project[]
@@ -25,15 +23,28 @@ interface SidebarProps {
 export function Sidebar({ projects }: SidebarProps) {
   const location = useLocation()
   const navigate = useNavigate()
-  const { sidebarOpen, toggleSidebar } = useAppStore()
+  const { 
+    sidebarOpen, 
+    toggleSidebar,
+    savedConversations,
+    savedConversationsLoading,
+    fetchSavedConversations,
+    loadConversation,
+    deleteSavedConversation,
+    clearMessages,
+  } = useAppStore()
   const { profile, signOut } = useAuth()
-  const { items: sandboxItems } = useSandboxItems()
 
-  // État pour ouvrir l'éditeur d'un item pinned
-  const [selectedPinnedItem, setSelectedPinnedItem] = useState<SandboxItem | null>(null)
-  
   // État pour la modale de réunion
   const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false)
+  
+  // État pour la conversation à supprimer (confirmation)
+  const [conversationToDelete, setConversationToDelete] = useState<SavedConversation | null>(null)
+
+  // Charger les conversations sauvegardées au montage
+  useEffect(() => {
+    fetchSavedConversations()
+  }, [fetchSavedConversations])
 
   const handleSignOut = async () => {
     try {
@@ -43,32 +54,32 @@ export function Sidebar({ projects }: SidebarProps) {
     }
   }
 
-  // Items épinglés (status = 'pinned')
-  const pinnedItems = sandboxItems.filter(item => item.status === 'pinned')
-
-  // Déterminer le type d'agent et l'icône
-  const getAgentIcon = (item: SandboxItem) => {
-    // Vérifier si c'est un CR de réunion
-    if (item.content.source_type === 'meeting_cr') {
-      return <Video className="w-4 h-4 text-amber-500" />
+  // Charger une conversation sauvegardée
+  const handleLoadConversation = (conversation: SavedConversation) => {
+    loadConversation(conversation)
+    // S'assurer qu'on est sur la page chat
+    if (location.pathname !== '/app') {
+      navigate('/app')
     }
-    if (item.content.routine) {
-      return <BarChart3 className="w-4 h-4 text-orange-500" />
-    }
-    return <Book className="w-4 h-4 text-blue-500" />
   }
 
-  // Ouvrir un item pinned
-  const handlePinnedItemClick = (item: SandboxItem) => {
-    setSelectedPinnedItem(item)
+  // Supprimer une conversation
+  const handleDeleteConversation = async (conversation: SavedConversation) => {
+    setConversationToDelete(conversation)
   }
 
-  // Callback update
-  const handleItemUpdate = (updatedItem: SandboxItem) => {
-    setSelectedPinnedItem(updatedItem)
-    // Si l'item a été dépinglé (édité), fermer le modal
-    if (updatedItem.status === 'draft') {
-      setSelectedPinnedItem(null)
+  const confirmDelete = async () => {
+    if (conversationToDelete) {
+      await deleteSavedConversation(conversationToDelete.id)
+      setConversationToDelete(null)
+    }
+  }
+
+  // Nouvelle conversation (vide le chat)
+  const handleNewConversation = () => {
+    clearMessages()
+    if (location.pathname !== '/app') {
+      navigate('/app')
     }
   }
 
@@ -83,6 +94,19 @@ export function Sidebar({ projects }: SidebarProps) {
   const routes = {
     chat: '/app',
     documents: '/app/documents',
+  }
+
+  // Formater la date relative
+  const formatRelativeDate = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+    
+    if (diffDays === 0) return "Aujourd'hui"
+    if (diffDays === 1) return 'Hier'
+    if (diffDays < 7) return `Il y a ${diffDays} jours`
+    return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
   }
 
   return (
@@ -150,7 +174,7 @@ export function Sidebar({ projects }: SidebarProps) {
                 )}
               </button>
 
-              {/* Couche de Savoir (anciennement Documents) */}
+              {/* Couche de Savoir */}
               <button
                 onClick={() => handleNavigate(routes.documents)}
                 title={!sidebarOpen ? 'Couche de Savoir' : undefined}
@@ -199,44 +223,79 @@ export function Sidebar({ projects }: SidebarProps) {
           {/* Séparateur */}
           <div className={`h-px bg-stone-200 dark:bg-stone-700 ${sidebarOpen ? 'mx-0' : 'mx-1'}`} />
 
-          {/* Section Espace de travail (Pinned) */}
+          {/* Section Discussions (conversations sauvegardées) */}
           <div>
             {sidebarOpen && (
-              <h3 className="text-[10px] font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wide mb-2 px-2">
-                Espace de travail
-              </h3>
+              <div className="flex items-center justify-between mb-2 px-2">
+                <h3 className="text-[10px] font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wide">
+                  Discussions
+                </h3>
+                <button
+                  onClick={handleNewConversation}
+                  className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  + Nouveau
+                </button>
+              </div>
             )}
             <div className="space-y-1">
-              {pinnedItems.length === 0 ? (
+              {savedConversationsLoading ? (
+                sidebarOpen && (
+                  <div className="flex items-center justify-center py-4">
+                    <div className="w-4 h-4 border-2 border-stone-300 border-t-stone-600 rounded-full animate-spin" />
+                  </div>
+                )
+              ) : savedConversations.length === 0 ? (
                 sidebarOpen && (
                   <p className="text-xs text-stone-400 dark:text-stone-500 px-2 py-2 italic">
-                    Aucun rapport épinglé
+                    Aucune discussion sauvegardée
                   </p>
                 )
               ) : (
-                pinnedItems.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => handlePinnedItemClick(item)}
-                    title={!sidebarOpen ? item.title : undefined}
-                    className={`w-full flex items-center rounded-lg transition group ${
-                      sidebarOpen ? 'gap-3 px-2 py-2' : 'justify-center p-2'
-                    } text-stone-600 dark:text-stone-400 hover:bg-stone-200/50 dark:hover:bg-stone-800/50 hover:text-stone-900 dark:hover:text-stone-100`}
+                savedConversations.map((conversation) => (
+                  <div
+                    key={conversation.id}
+                    className={`group/conv flex items-center rounded-lg transition ${
+                      sidebarOpen ? 'px-2 py-2' : 'justify-center p-2'
+                    } text-stone-600 dark:text-stone-400 hover:bg-stone-200/50 dark:hover:bg-stone-800/50`}
                   >
-                    {/* Icône selon type d'agent */}
-                    <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
-                      {getAgentIcon(item)}
-                    </div>
-                    
-                    {/* Titre */}
-                    {sidebarOpen && (
-                      <div className="text-left flex-1 min-w-0">
-                        <span className="block text-sm font-medium truncate">
-                          {item.title}
-                        </span>
+                    <button
+                      onClick={() => handleLoadConversation(conversation)}
+                      title={!sidebarOpen ? conversation.title : undefined}
+                      className={`flex items-center flex-1 min-w-0 ${sidebarOpen ? 'gap-3' : ''}`}
+                    >
+                      {/* Icône */}
+                      <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
+                        <MessageSquare className="w-4 h-4 text-stone-400" />
                       </div>
+                      
+                      {/* Titre et date */}
+                      {sidebarOpen && (
+                        <div className="text-left flex-1 min-w-0">
+                          <span className="block text-sm font-medium truncate">
+                            {conversation.title}
+                          </span>
+                          <span className="block text-[10px] text-stone-400 dark:text-stone-500">
+                            {formatRelativeDate(conversation.updated_at)}
+                          </span>
+                        </div>
+                      )}
+                    </button>
+
+                    {/* Bouton supprimer */}
+                    {sidebarOpen && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeleteConversation(conversation)
+                        }}
+                        className="p-1 rounded opacity-0 group-hover/conv:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/30 text-stone-400 hover:text-red-500 transition-all"
+                        title="Supprimer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     )}
-                  </button>
+                  </div>
                 ))
               )}
             </div>
@@ -281,14 +340,36 @@ export function Sidebar({ projects }: SidebarProps) {
         </div>
       </aside>
 
-      {/* Modal pour item pinned */}
-      {selectedPinnedItem && (
-        <SandboxEditor
-          item={selectedPinnedItem}
-          onClose={() => setSelectedPinnedItem(null)}
-          onUpdate={handleItemUpdate}
-          onDelete={() => setSelectedPinnedItem(null)}
-        />
+      {/* Modal de confirmation suppression */}
+      {conversationToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setConversationToDelete(null)}
+          />
+          <div className="relative bg-white dark:bg-stone-900 rounded-xl shadow-xl p-6 max-w-sm w-full">
+            <h3 className="text-lg font-semibold text-stone-800 dark:text-stone-200 mb-2">
+              Supprimer cette discussion ?
+            </h3>
+            <p className="text-sm text-stone-500 dark:text-stone-400 mb-4">
+              "{conversationToDelete.title}" sera définitivement supprimée.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setConversationToDelete(null)}
+                className="px-4 py-2 text-sm text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg transition"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg transition"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal pour enregistrement de réunion */}

@@ -1,7 +1,7 @@
 // ============================================================
-// ARPET - Types unifiés v3.0
-// Version: 3.6.0 - Ajout types Meeting (Phase 2.2)
-// Date: 2025-12-18
+// ARPET - Types unifiés v4.0
+// Version: 4.0.0 - Suppression Sandbox, ajout SavedConversation
+// Date: 2025-12-19
 // ============================================================
 
 // ============================================
@@ -90,7 +90,7 @@ export interface MessageSource {
   content_preview?: string;
   authority_label?: AuthorityLabel;
   qa_id?: string;
-  // ✅ Ajout v3.5.0 - ID du fichier source pour Split View
+  // ID du fichier source pour Split View
   source_file_id?: string;
 }
 
@@ -121,7 +121,7 @@ export interface Message {
   prompt_used?: string;
   prompt_resolution?: string;
 
-  // ✅ QUICK WIN: RAG Badge metadata
+  // RAG Badge metadata
   generation_mode?: 'chunks' | 'gemini' | 'hybrid';
   cache_status?: 'hit' | 'miss' | 'none';
 
@@ -132,8 +132,6 @@ export interface Message {
 
   // État UI
   isStreaming?: boolean;
-  isAnchored?: boolean;
-  sandboxItemId?: string;  // ID du sandbox item si ancré
 }
 
 // ============================================
@@ -503,126 +501,33 @@ export function getViewerType(mimeType: string | null, filename: string): 'pdf' 
 }
 
 // ============================================
-// BAC À SABLE (SANDBOX) - Types de base
+// CONVERSATIONS SAUVEGARDÉES (v4.0.0)
 // ============================================
-export type SandboxItemStatus = 'draft' | 'pinned' | 'archived';
-export type SandboxVisibility = 'private' | 'project' | 'org';
-export type ResultType = 'table' | 'chart' | 'number' | 'text';
 
 /**
- * Type de source d'un item sandbox (v3.5.0)
- * - manual: Créé manuellement par l'utilisateur
- * - chat_anchor: Ancré depuis le chat
- * - voice_note: Créé via dictée rapide
- * - meeting_cr: Créé via CR de réunion (v3.6.0)
+ * Conversation sauvegardée (table arpet.saved_conversations)
  */
-export type SandboxSourceType = 'manual' | 'chat_anchor' | 'voice_note' | 'meeting_cr';
-
-/** Message dans la conversation sandbox */
-export interface SandboxMessage {
-  role: 'user' | 'agent';
-  text: string;
-  at: string; // ISO 8601
-}
-
-/** Données affichées à l'utilisateur */
-export interface SandboxDisplay {
-  result_type: ResultType | null;
-  result_data: unknown;
-  last_run_at: string | null;
-}
-
-/** Paramètres de la routine agent */
-export interface RoutineParams {
-  fixed: Record<string, unknown>;
-  dynamic: Record<string, unknown>;
-}
-
-/** Step de la routine agent */
-export interface RoutineStep {
-  action: string;
-  target?: string;
-  operation?: string;
-  field?: string;
-  filter?: Record<string, unknown>;
-  threshold?: number;
-  [key: string]: unknown;
-}
-
-/** Routine complète de l'agent */
-export interface SandboxRoutine {
-  version: number;
-  steps: RoutineStep[];
-  params: RoutineParams;
-}
-
-/** Structure complète du content JSONB */
-export interface SandboxContent {
-  objective: string;
-  initial_prompt: string;
-  messages: SandboxMessage[];
-  display: SandboxDisplay;
-  routine: SandboxRoutine | null;
-  /** ✅ NOUVEAU v3.5.0: Type de source pour identifier l'origine de l'item */
-  source_type?: SandboxSourceType;
-  /** ✅ NOUVEAU v3.6.0: ID de la réunion source (si meeting_cr) */
-  source_meeting_id?: string;
-}
-
-/** Sandbox Item complet (depuis Supabase) */
-export interface SandboxItem {
+export interface SavedConversation {
   id: string;
   app_id: string;
   org_id: string;
   user_id: string;
   project_id: string | null;
   title: string;
-  content: SandboxContent;
-  status: SandboxItemStatus;
-  visibility: SandboxVisibility;
+  messages: Message[];
   source_qa_id: string | null;
   created_at: string;
   updated_at: string;
 }
 
-/** Pour créer un nouveau sandbox item */
-export interface SandboxItemCreate {
+/**
+ * Pour créer une nouvelle conversation sauvegardée
+ */
+export interface SavedConversationCreate {
   title: string;
+  messages: Message[];
   project_id?: string | null;
-  content?: Partial<SandboxContent>;
   source_qa_id?: string | null;
-}
-
-/** Pour mettre à jour un sandbox item */
-export interface SandboxItemUpdate {
-  title?: string;
-  content?: Partial<SandboxContent>;
-  project_id?: string | null;
-}
-
-// ============================================
-// TYPES UI POUR LE SANDBOX
-// ============================================
-
-/** Item affiché dans le Bac à Sable (drafts) */
-export interface SandboxDraftCard {
-  id: string;
-  title: string;
-  objective: string;
-  lastMessage: string | null;
-  messagesCount: number;
-  hasResult: boolean;
-  updatedAt: Date;
-}
-
-/** Widget affiché dans l'Espace de Travail (pinned) */
-export interface WorkspaceWidget {
-  id: string;
-  title: string;
-  resultType: ResultType | null;
-  resultData: unknown;
-  lastRunAt: Date | null;
-  canRefresh: boolean;
 }
 
 // ============================================
@@ -707,26 +612,6 @@ export const MEETING_PROCESSING_LABELS: Record<MeetingProcessingStatus, string> 
 // ============================================
 
 /**
- * Crée un contenu sandbox vide
- */
-export function createEmptySandboxContent(
-  title: string = 'Nouveau',
-  objective: string = ''
-): SandboxContent {
-  return {
-    objective,
-    initial_prompt: title,
-    messages: [],
-    display: {
-      result_type: null,
-      result_data: null,
-      last_run_at: null,
-    },
-    routine: null,
-  };
-}
-
-/**
  * Vérifie si une source est une qa_memory validée
  */
 export function isValidatedSource(source: MessageSource): boolean {
@@ -785,23 +670,6 @@ export function getKnowledgeTypeIcon(type?: KnowledgeType): string {
 export function formatScore(score?: number): string {
   if (score === undefined || score === null) return '';
   return `${Math.round(score * 100)}%`;
-}
-
-/**
- * Retourne l'icône selon le source_type du sandbox (v3.6.0)
- */
-export function getSandboxSourceIcon(sourceType?: SandboxSourceType): string {
-  switch (sourceType) {
-    case 'voice_note':
-      return '🎤';
-    case 'chat_anchor':
-      return '⚓';
-    case 'meeting_cr':
-      return '📹';
-    case 'manual':
-    default:
-      return '📝';
-  }
 }
 
 /**

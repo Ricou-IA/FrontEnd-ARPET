@@ -1,7 +1,7 @@
 // ============================================================
 // ARPET - DocumentsTabs Component
-// Version: 2.2.0 - Style High-End SaaS avec point actif
-// Date: 2025-12-18
+// Version: 2.3.0 - Fix onglet actif sans mouvement vertical
+// Date: 2025-12-20
 // ============================================================
 
 import { useAppStore } from '@/stores/appStore'
@@ -29,16 +29,16 @@ export function DocumentsTabs({ counts }: DocumentsTabsProps) {
               key={layer}
               onClick={() => setDocumentsActiveLayer(layer)}
               className={`
-                relative flex items-center gap-2 px-0 py-4 transition-colors
+                relative flex items-center gap-2 px-0 py-4 text-base font-medium transition-colors
                 ${isActive 
-                  ? 'text-slate-900 font-medium text-lg pb-1 border-b-2 border-slate-900' 
-                  : 'text-gray-500 hover:text-gray-700 text-base font-medium'
+                  ? 'text-slate-900' 
+                  : 'text-gray-500 hover:text-gray-700'
                 }
               `}
             >
               {/* Point bleu marine pour l'actif */}
               {isActive && (
-                <span className="w-1.5 h-1.5 rounded-full bg-[#0B0F17]"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-[#0B0F17]" />
               )}
               
               {/* Label */}
@@ -55,6 +55,11 @@ export function DocumentsTabs({ counts }: DocumentsTabsProps) {
                 `}>
                   {count}
                 </span>
+              )}
+
+              {/* Soulignement actif - positionné en absolute pour éviter le décalage */}
+              {isActive && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-slate-900" />
               )}
             </button>
           )

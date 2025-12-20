@@ -1,7 +1,7 @@
 // ============================================================
 // ARPET - Documents Service (Supabase)
-// Version: 1.4.0 - Ajout getSourceFileByChunkId pour Split View
-// Date: 2025-12-18
+// Version: 1.5.0 - Fix superadmin access (null app_id/org_id)
+// Date: 2025-12-20
 // ============================================================
 
 import { supabase } from '@/lib/supabase';
@@ -101,6 +101,7 @@ export async function getDocumentCategories(
 
 /**
  * Récupère les fichiers par couche documentaire
+ * Note: Si app_id ou org_id est null (superadmin), pas de filtre appliqué
  */
 export async function getFilesByLayer(
   layer: DocumentLayer,
@@ -121,18 +122,25 @@ export async function getFilesByLayer(
       .order('created_at', { ascending: false });
 
     // Filtres selon la couche
+    // Note: Si la valeur est null/undefined, on ne filtre pas (superadmin voit tout)
     switch (layer) {
       case 'app':
         // Documents Métier : accessibles par app_id
-        query = query.eq('app_id', profile.app_id);
+        if (profile.app_id) {
+          query = query.eq('app_id', profile.app_id);
+        }
         break;
       case 'org':
         // Documents Orga : accessibles par org_id
-        query = query.eq('org_id', profile.org_id);
+        if (profile.org_id) {
+          query = query.eq('org_id', profile.org_id);
+        }
         break;
       case 'project':
         // Documents Équipe : accessibles par org_id + project_id optionnel
-        query = query.eq('org_id', profile.org_id);
+        if (profile.org_id) {
+          query = query.eq('org_id', profile.org_id);
+        }
         if (options?.projectId) {
           query = query.eq('project_id', options.projectId);
         }
@@ -299,7 +307,7 @@ export async function uploadFile(
     // Générer un chemin unique
     const timestamp = Date.now();
     const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const storagePath = `${profile.org_id}/${profile.id}/${timestamp}_${safeName}`;
+    const storagePath = `${profile.org_id || 'no-org'}/${profile.id}/${timestamp}_${safeName}`;
 
     // 1. Upload vers Supabase Storage
     const { error: uploadError } = await supabase.storage
@@ -317,10 +325,10 @@ export async function uploadFile(
       mime_type: file.type,
       file_size: file.size,
       layer: 'user' as DocumentLayer,
-      org_id: profile.org_id,
+      org_id: profile.org_id || null,
       project_id: projectId || null,
       created_by: profile.id,
-      app_id: profile.app_id,
+      app_id: profile.app_id || null,
       storage_bucket: 'user-workspace',
       storage_path: storagePath,
       ingestion_level: 'user',
@@ -584,6 +592,7 @@ export async function rejectPromotion(
 
 /**
  * Compte les fichiers par couche (avec filtre projet optionnel)
+ * Note: Si app_id ou org_id est null (superadmin), pas de filtre appliqué
  */
 export async function getFilesCountByLayer(
   projectId?: string
@@ -608,15 +617,23 @@ export async function getFilesCountByLayer(
         .select('id', { count: 'exact', head: true })
         .eq('layer', layer);
 
+      // Filtres selon la couche
+      // Note: Si la valeur est null/undefined, on ne filtre pas (superadmin voit tout)
       switch (layer) {
         case 'app':
-          query = query.eq('app_id', profile.app_id);
+          if (profile.app_id) {
+            query = query.eq('app_id', profile.app_id);
+          }
           break;
         case 'org':
-          query = query.eq('org_id', profile.org_id);
+          if (profile.org_id) {
+            query = query.eq('org_id', profile.org_id);
+          }
           break;
         case 'project':
-          query = query.eq('org_id', profile.org_id);
+          if (profile.org_id) {
+            query = query.eq('org_id', profile.org_id);
+          }
           // Si un projet est sélectionné, filtrer par ce projet
           if (projectId) {
             query = query.eq('project_id', projectId);
@@ -640,17 +657,24 @@ export async function getFilesCountByLayer(
 
 /**
  * Compte les demandes de promotion en attente (pour Team Leader)
+ * Note: Si org_id est null (superadmin), compte toutes les demandes
  */
 export async function getPendingPromotionsCount(): Promise<ServiceResult<number>> {
   try {
     const profile = await getCurrentProfile();
 
-    const { count, error } = await supabase
+    let query = supabase
       .schema('sources')
       .from('files')
       .select('id', { count: 'exact', head: true })
-      .eq('org_id', profile.org_id)
       .eq('promotion_status', 'pending');
+
+    // Filtrer par org_id seulement si défini
+    if (profile.org_id) {
+      query = query.eq('org_id', profile.org_id);
+    }
+
+    const { count, error } = await query;
 
     if (error) throw error;
 
@@ -667,18 +691,25 @@ export async function getPendingPromotionsCount(): Promise<ServiceResult<number>
 
 /**
  * Récupère les projets accessibles à l'utilisateur
+ * Note: Si org_id est null (superadmin), retourne tous les projets
  */
 export async function getUserProjects(): Promise<ServiceResult<Project[]>> {
   try {
     const profile = await getCurrentProfile();
 
-    const { data, error } = await supabase
+    let query = supabase
       .schema('core')
       .from('projects')
       .select('id, name, org_id, description, status, created_at, updated_at')
-      .eq('org_id', profile.org_id)
       .eq('status', 'active')
       .order('name', { ascending: true });
+
+    // Filtrer par org_id seulement si défini
+    if (profile.org_id) {
+      query = query.eq('org_id', profile.org_id);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 
