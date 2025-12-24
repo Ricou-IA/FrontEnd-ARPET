@@ -1,7 +1,7 @@
 // ============================================================
 // ARPET - Dashboard Page
-// Version: 5.2.0 - Clear messages après sauvegarde
-// Date: 2025-12-19
+// Version: 5.3.0 - Support mémoire conversationnelle RAG
+// Date: 2025-12-20
 // ============================================================
 
 import { useState, useEffect, useRef } from 'react'
@@ -23,6 +23,9 @@ export function Dashboard() {
     isAgentTyping,
     setIsAgentTyping,
     saveConversation,
+    // v5.3.0: Mémoire conversationnelle
+    currentConversationId,
+    setCurrentConversationId,
   } = useAppStore()
 
   const userName = profile?.full_name?.split(' ')[0] || 'Eric'
@@ -67,7 +70,7 @@ export function Dashboard() {
     }
     
     console.log('💾 [Dashboard] Sauvegarde OK, clearMessages...')
-    clearMessages()
+    await clearMessages()
     console.log('💾 [Dashboard] Messages après clear:', useAppStore.getState().messages.length)
   }
 
@@ -94,6 +97,7 @@ export function Dashboard() {
       const userId = session?.user?.id || null
       
       console.log('[Dashboard] User ID:', userId)
+      console.log('[Dashboard] Conversation ID:', currentConversationId || 'nouvelle conversation')
       
       const { data, error } = await supabase.functions.invoke('baikal-brain', {
         body: {
@@ -101,6 +105,8 @@ export function Dashboard() {
           user_id: userId,
           org_id: profile?.org_id || null,
           project_id: activeProject?.id || null,
+          // v5.3.0: Transmettre le conversation_id pour la mémoire
+          conversation_id: currentConversationId,
         }
       })
 
@@ -118,6 +124,12 @@ export function Dashboard() {
       }
 
       console.log('[Dashboard] Réponse Edge Function:', data)
+      
+      // v5.3.0: Stocker le conversation_id retourné par le backend
+      if (data?.conversation_id) {
+        console.log('[Dashboard] Conversation ID reçu:', data.conversation_id)
+        setCurrentConversationId(data.conversation_id)
+      }
 
       let responseContent = ''
       if (data) {

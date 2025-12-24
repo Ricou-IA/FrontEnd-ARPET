@@ -1,10 +1,11 @@
 // ============================================================
 // ARPET - App Store (Zustand)
-// Version: 5.0.0 - Suppression Sandbox, ajout Conversations
-// Date: 2025-12-19
+// Version: 5.5.0 - Liaison rag_conversation_id complète
+// Date: 2025-12-21
 // ============================================================
 
 import { create } from 'zustand'
+import { supabase } from '../lib/supabase'
 import type { 
   Message, 
   Project, 
@@ -37,8 +38,14 @@ interface AppState {
   // ========================================
   messages: Message[]
   addMessage: (message: Message) => void
-  clearMessages: () => void
+  clearMessages: () => Promise<void>
   setMessages: (messages: Message[]) => void
+  
+  // ========================================
+  // CONVERSATION RAG (mémoire IA)
+  // ========================================
+  currentConversationId: string | null
+  setCurrentConversationId: (id: string | null) => void
   
   // ========================================
   // AGENT
@@ -122,9 +129,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   // ========================================
   activeProject: null,
   setActiveProject: (project) => {
-    set({ activeProject: project })
+    set({ 
+      activeProject: project,
+      // Reset conversation quand on change de projet
+      currentConversationId: null,
+    })
     // Recalculer les counts quand le projet change
     get().fetchDocumentsCounts()
+    // Recharger les conversations sauvegardées du nouveau projet
+    get().fetchSavedConversations()
   },
   
   // ========================================
@@ -134,8 +147,37 @@ export const useAppStore = create<AppState>((set, get) => ({
   addMessage: (message) => set((state) => ({ 
     messages: [...state.messages, message] 
   })),
-  clearMessages: () => set({ messages: [] }),
+  
+  // v5.4.0: clearMessages ferme la conversation RAG active
+  clearMessages: async () => {
+    const currentConvId = get().currentConversationId
+    
+    // Fermer la conversation RAG active si elle existe
+    if (currentConvId) {
+      console.log('🔒 Closing RAG conversation on clear:', currentConvId)
+      try {
+        await supabase.schema('rag').rpc('close_conversation', {
+          p_conversation_id: currentConvId
+        })
+        console.log('✅ RAG conversation closed')
+      } catch (e) {
+        console.error('❌ Error closing RAG conversation:', e)
+      }
+    }
+    
+    set({ 
+      messages: [],
+      currentConversationId: null,
+    })
+  },
+  
   setMessages: (messages) => set({ messages }),
+  
+  // ========================================
+  // CONVERSATION RAG (mémoire IA)
+  // ========================================
+  currentConversationId: null,
+  setCurrentConversationId: (id) => set({ currentConversationId: id }),
   
   // ========================================
   // AGENT
@@ -164,32 +206,56 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ savedConversationsLoading: true, savedConversationsError: null })
     
     try {
-      const { data, error } = await conversationsService.getSavedConversations()
+      // Filtrer par projet actif (isolation par chantier)
+      const projectId = state.activeProject?.id || null
+      const { data, error } = await conversationsService.getSavedConversations(projectId)
       
       if (error) throw error
       
       set({ savedConversations: data || [], savedConversationsLoading: false })
-      console.log('✅ Saved conversations loaded:', data?.length || 0)
+      console.log('✅ Saved conversations loaded:', data?.length || 0, 'for project:', projectId || 'none')
     } catch (err) {
       console.error('❌ Fetch conversations error:', err)
       set({ savedConversationsError: err as Error, savedConversationsLoading: false })
     }
   },
   
+  // v5.5.0: Sauvegarde avec liaison rag_conversation_id
   saveConversation: async (input) => {
     set({ savedConversationsError: null })
     console.log('💾 Saving conversation:', input.title)
     
     try {
-      const { data, error } = await conversationsService.createSavedConversation(input)
+      const currentConvId = get().currentConversationId
+      
+      // Sauvegarder avec le rag_conversation_id pour conserver le lien
+      const { data, error } = await conversationsService.createSavedConversation({
+        ...input,
+        rag_conversation_id: currentConvId,
+      })
       
       if (error) throw error
       
       if (data) {
+        // Fermer la conversation RAG (mais ne pas la supprimer)
+        if (currentConvId) {
+          console.log('🔒 Closing RAG conversation after save:', currentConvId)
+          try {
+            await supabase.schema('rag').rpc('close_conversation', {
+              p_conversation_id: currentConvId
+            })
+            console.log('✅ RAG conversation closed after save')
+          } catch (e) {
+            console.error('❌ Error closing RAG conversation:', e)
+          }
+        }
+        
         set((state) => ({ 
-          savedConversations: [data, ...state.savedConversations]
+          savedConversations: [data, ...state.savedConversations],
+          // Reset pour nouvelle conversation
+          currentConversationId: null,
         }))
-        console.log('✅ Conversation saved:', data.id)
+        console.log('✅ Conversation saved:', data.id, 'with rag_id:', currentConvId)
         return data
       }
       
@@ -201,12 +267,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   
+  // v5.5.0: Suppression avec cascade sur RAG
   deleteSavedConversation: async (id) => {
     set({ savedConversationsError: null })
     console.log('🗑️ Deleting conversation:', id)
     
     try {
-      const { error } = await conversationsService.deleteSavedConversation(id)
+      // Trouver la conversation pour récupérer le rag_conversation_id
+      const conversation = get().savedConversations.find(c => c.id === id)
+      const ragConversationId = (conversation as any)?.rag_conversation_id || null
+      
+      const { error } = await conversationsService.deleteSavedConversation(id, ragConversationId)
       
       if (error) throw error
       
@@ -222,10 +293,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   
+  // v5.5.0: Chargement avec restauration du rag_conversation_id
   loadConversation: (conversation) => {
     console.log('📂 Loading conversation:', conversation.title)
-    // Charger les messages dans le chat
-    set({ messages: conversation.messages })
+    
+    // Récupérer le rag_conversation_id si présent
+    const ragConversationId = (conversation as any)?.rag_conversation_id || null
+    
+    console.log('📂 Restoring RAG conversation ID:', ragConversationId || 'none')
+    
+    set({ 
+      messages: conversation.messages,
+      // Restaurer le currentConversationId pour retrouver le contexte RAG
+      currentConversationId: ragConversationId,
+    })
   },
   
   clearSavedConversationsError: () => set({ savedConversationsError: null }),
