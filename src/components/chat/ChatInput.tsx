@@ -1,6 +1,6 @@
 // ============================================================
 // ARPET - ChatInput Component
-// Version: 3.2.0 - Zone de saisie compacte (1 ligne) avec auto-expansion
+// Version: 3.2.1 - Zone compacte + hint inline
 // Date: 2025-12-27
 // ============================================================
 
@@ -201,21 +201,21 @@ export function ChatInput({
             accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
           />
 
-          {/* Bouton envoyer */}
-          <button 
-            onClick={handleSubmit}
-            disabled={disabled || (!content.trim() && files.length === 0)}
-            className="px-4 py-1.5 bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-800 rounded-lg hover:bg-black dark:hover:bg-white transition font-medium text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <span>Envoyer</span>
-            <Send className="w-3.5 h-3.5" />
-          </button>
+          {/* Hint + Bouton envoyer */}
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] text-stone-400 dark:text-stone-500">
+              Shift+Entrée pour nouvelle ligne
+            </span>
+            <button 
+              onClick={handleSubmit}
+              disabled={disabled || (!content.trim() && files.length === 0)}
+              className="px-4 py-1.5 bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-800 rounded-lg hover:bg-black dark:hover:bg-white transition font-medium text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span>Envoyer</span>
+              <Send className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
-
-        {/* Hint */}
-        <p className="text-[10px] text-stone-400 dark:text-stone-500 text-right -mt-1">
-          Shift+Entrée pour nouvelle ligne
-        </p>
       </div>
 
       {/* Modal de dictée */}
