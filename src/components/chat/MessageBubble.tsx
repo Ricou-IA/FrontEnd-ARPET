@@ -1,10 +1,10 @@
 // ============================================================
 // ARPET - MessageBubble Component
-// Version: 6.0.0 - Suppression Sandbox, simplification
-// Date: 2025-12-19
+// Version: 6.1.0 - Filtrage sources citées uniquement
+// Date: 2025-12-27
 // ============================================================
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { 
   Copy, ThumbsUp, ThumbsDown, Zap, Check, 
   AlertCircle, CheckCircle, Loader2, Eye 
@@ -22,6 +22,30 @@ interface MessageBubbleProps {
   onVoteComplete?: (message: Message, voteType: 'up' | 'down', qaId?: string) => void
 }
 
+// ============================================================
+// v6.1.0: HELPER - Extraire les indices de sources citées
+// ============================================================
+
+function extractCitedSourceIndices(content: string): Set<number> {
+  const citedIndices = new Set<number>()
+  
+  // Pattern pour matcher [1], [2], [1, 2], [1,2,3], etc.
+  // Le LLM utilise des indices commençant à 1
+  const pattern = /\[(\d+)(?:\s*,\s*(\d+))*\]/g
+  
+  let match
+  while ((match = pattern.exec(content)) !== null) {
+    // Extraire tous les nombres de la correspondance
+    const fullMatch = match[0]
+    const numbers = fullMatch.match(/\d+/g)
+    if (numbers) {
+      numbers.forEach(n => citedIndices.add(parseInt(n, 10)))
+    }
+  }
+  
+  return citedIndices
+}
+
 export function MessageBubble({ message, onVoteComplete }: MessageBubbleProps) {
   const { profile } = useAuth()
   const { openViewer } = useAppStore()
@@ -32,6 +56,22 @@ export function MessageBubble({ message, onVoteComplete }: MessageBubbleProps) {
   const [voteError, setVoteError] = useState<string | null>(null)
   const [localValidationCount, setLocalValidationCount] = useState(message.validation_count || 0)
   const [copied, setCopied] = useState(false)
+
+  // ================================================================
+  // v6.1.0: FILTRER LES SOURCES CITÉES
+  // ================================================================
+  const citedSources = useMemo(() => {
+    if (!message.sources || message.sources.length === 0) return []
+    
+    // Extraire les indices cités dans le contenu
+    const citedIndices = extractCitedSourceIndices(message.content)
+    
+    // Si aucune citation trouvée, ne pas afficher de sources
+    if (citedIndices.size === 0) return []
+    
+    // Filtrer les sources : indices sont 1-based dans le texte, 0-based dans le tableau
+    return message.sources.filter((_, index) => citedIndices.has(index + 1))
+  }, [message.sources, message.content])
 
   // ================================================================
   // MESSAGE UTILISATEUR
@@ -232,13 +272,14 @@ export function MessageBubble({ message, onVoteComplete }: MessageBubbleProps) {
   }
 
   const renderSources = () => {
-    if (!message.sources || message.sources.length === 0) return null
+    // v6.1.0: Utiliser citedSources (filtrées) au lieu de message.sources
+    if (citedSources.length === 0) return null
 
     return (
       <div className="mt-3 pt-2 border-t border-stone-100 dark:border-stone-800">
         <p className="text-[10px] text-stone-400 dark:text-stone-500 font-medium mb-1.5">Sources :</p>
         <div className="flex flex-wrap gap-1.5">
-          {message.sources.map((source, index) => (
+          {citedSources.map((source, index) => (
             <SourceBadge 
               key={source.id || index} 
               source={source} 
