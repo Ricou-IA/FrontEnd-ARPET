@@ -1,7 +1,7 @@
 // ============================================================
 // ARPET - ChatInput Component
-// Version: 3.1.0 - Entrée pour envoyer, Shift+Entrée pour nouvelle ligne
-// Date: 2025-12-20
+// Version: 3.2.0 - Zone de saisie compacte (1 ligne) avec auto-expansion
+// Date: 2025-12-27
 // ============================================================
 
 import { useState, useRef, KeyboardEvent } from 'react'
@@ -98,7 +98,7 @@ export function ChatInput({
   return (
     <>
       <div className="chat-container bg-transparent border-0 shadow-none rounded-none p-0 flex flex-col gap-3">
-        {/* Zone de texte */}
+        {/* Zone de texte - Compacte (1 ligne) avec auto-expansion */}
         <textarea 
           ref={textareaRef}
           value={content}
@@ -106,8 +106,8 @@ export function ChatInput({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           disabled={disabled}
-          className="flex-1 bg-transparent outline-none text-base text-stone-700 dark:text-stone-200 placeholder-stone-300 dark:placeholder-stone-600 resize-none font-light leading-relaxed min-h-[60px] disabled:opacity-50"
-          rows={2}
+          className="flex-1 bg-transparent outline-none text-base text-stone-700 dark:text-stone-200 placeholder-stone-300 dark:placeholder-stone-600 resize-none font-light leading-relaxed min-h-[24px] disabled:opacity-50"
+          rows={1}
         />
 
         {/* Fichiers attachés */}
