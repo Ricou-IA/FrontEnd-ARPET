@@ -1,10 +1,10 @@
 // ============================================================
 // ARPET - MessageBubble Component
-// Version: 6.1.0 - Filtrage sources citées uniquement
-// Date: 2025-12-27
+// Version: 7.0.0 - Phase 5 : Sources filtrées côté backend
+// Date: 2024-12-30
 // ============================================================
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback } from 'react'
 import { 
   Copy, ThumbsUp, ThumbsDown, Zap, Check, 
   AlertCircle, CheckCircle, Loader2, Eye 
@@ -22,30 +22,6 @@ interface MessageBubbleProps {
   onVoteComplete?: (message: Message, voteType: 'up' | 'down', qaId?: string) => void
 }
 
-// ============================================================
-// v6.1.0: HELPER - Extraire les indices de sources citées
-// ============================================================
-
-function extractCitedSourceIndices(content: string): Set<number> {
-  const citedIndices = new Set<number>()
-  
-  // Pattern pour matcher [1], [2], [1, 2], [1,2,3], etc.
-  // Le LLM utilise des indices commençant à 1
-  const pattern = /\[(\d+)(?:\s*,\s*(\d+))*\]/g
-  
-  let match
-  while ((match = pattern.exec(content)) !== null) {
-    // Extraire tous les nombres de la correspondance
-    const fullMatch = match[0]
-    const numbers = fullMatch.match(/\d+/g)
-    if (numbers) {
-      numbers.forEach(n => citedIndices.add(parseInt(n, 10)))
-    }
-  }
-  
-  return citedIndices
-}
-
 export function MessageBubble({ message, onVoteComplete }: MessageBubbleProps) {
   const { profile } = useAuth()
   const { openViewer } = useAppStore()
@@ -56,22 +32,6 @@ export function MessageBubble({ message, onVoteComplete }: MessageBubbleProps) {
   const [voteError, setVoteError] = useState<string | null>(null)
   const [localValidationCount, setLocalValidationCount] = useState(message.validation_count || 0)
   const [copied, setCopied] = useState(false)
-
-  // ================================================================
-  // v6.1.0: FILTRER LES SOURCES CITÉES
-  // ================================================================
-  const citedSources = useMemo(() => {
-    if (!message.sources || message.sources.length === 0) return []
-    
-    // Extraire les indices cités dans le contenu
-    const citedIndices = extractCitedSourceIndices(message.content)
-    
-    // Si aucune citation trouvée, ne pas afficher de sources
-    if (citedIndices.size === 0) return []
-    
-    // Filtrer les sources : indices sont 1-based dans le texte, 0-based dans le tableau
-    return message.sources.filter((_, index) => citedIndices.has(index + 1))
-  }, [message.sources, message.content])
 
   // ================================================================
   // MESSAGE UTILISATEUR
@@ -271,17 +231,17 @@ export function MessageBubble({ message, onVoteComplete }: MessageBubbleProps) {
     return null
   }
 
+  // v7.0.0: Affichage direct des sources (filtrage fait côté backend)
   const renderSources = () => {
-    // v6.1.0: Utiliser citedSources (filtrées) au lieu de message.sources
-    if (citedSources.length === 0) return null
+    if (!message.sources || message.sources.length === 0) return null
 
     return (
       <div className="mt-3 pt-2 border-t border-stone-100 dark:border-stone-800">
         <p className="text-[10px] text-stone-400 dark:text-stone-500 font-medium mb-1.5">Sources :</p>
         <div className="flex flex-wrap gap-1.5">
-          {citedSources.map((source, index) => (
+          {message.sources.map((source, index) => (
             <SourceBadge 
-              key={source.id || index} 
+              key={source.id || source.source_file_id || index} 
               source={source} 
               onOpenViewer={openViewer}
             />
@@ -305,9 +265,11 @@ export function MessageBubble({ message, onVoteComplete }: MessageBubbleProps) {
           
           {renderKnowledgeHeader()}
 
-          {message.generation_mode && (
+          {/* v7.0.0: Support generation_mode_ui */}
+          {(message.generation_mode || message.generation_mode_ui) && (
             <RagBadge
               generationMode={message.generation_mode}
+              generationModeUi={message.generation_mode_ui}
               cacheStatus={message.cache_status}
               processingTimeMs={message.processing_time_ms}
               documentsFound={message.documents_found}
@@ -426,11 +388,9 @@ function SourceBadge({ source, onOpenViewer }: SourceBadgeProps) {
   const isQAMemory = source.type === 'qa_memory'
   const authorityBadge = isQAMemory ? getAuthorityBadge(source.authority_label) : null
   
-  // Utiliser source_file_id directement (ID du fichier dans sources.files)
   const sourceFileId = source.source_file_id
   const isDocument = !isQAMemory && sourceFileId
 
-  // Handler pour ouvrir le document dans le Split View
   const handleViewDocument = async (e: React.MouseEvent) => {
     e.stopPropagation()
     
@@ -440,7 +400,6 @@ function SourceBadge({ source, onOpenViewer }: SourceBadgeProps) {
     setIsLoading(true)
     
     try {
-      // Récupérer directement le fichier par son ID
       const { data: file, error: fileError } = await getSourceFileById(sourceFileId)
       
       if (fileError || !file) {
@@ -455,7 +414,6 @@ function SourceBadge({ source, onOpenViewer }: SourceBadgeProps) {
         return
       }
 
-      // Générer l'URL signée
       const { data: url, error: urlError } = await getFileDownloadUrl(
         file.storage_bucket,
         file.storage_path
@@ -466,7 +424,6 @@ function SourceBadge({ source, onOpenViewer }: SourceBadgeProps) {
         return
       }
 
-      // Ouvrir le viewer
       const viewerDoc: ViewerDocument = {
         id: file.id,
         filename: file.original_filename,
@@ -503,7 +460,6 @@ function SourceBadge({ source, onOpenViewer }: SourceBadgeProps) {
     )
   }
 
-  // Document classique avec bouton Voir
   const displayName = source.document_name || source.name || 'Document'
   
   return (
@@ -511,14 +467,13 @@ function SourceBadge({ source, onOpenViewer }: SourceBadgeProps) {
       className="text-[10px] bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 px-2 py-0.5 rounded flex items-center gap-1.5 group/source"
       title={source.content_preview || 'Document source'}
     >
-      <span className="truncate max-w-[120px]">
+      <span className="truncate max-w-[150px]">
         {displayName}
       </span>
       {source.score !== undefined && (
         <span className="opacity-60">({Math.round(source.score * 100)}%)</span>
       )}
       
-      {/* Bouton Voir - uniquement si source_file_id existe */}
       {isDocument && (
         <button
           onClick={handleViewDocument}

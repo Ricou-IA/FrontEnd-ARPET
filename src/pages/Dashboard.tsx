@@ -1,7 +1,8 @@
 // ============================================================
 // ARPET - Dashboard Page
-// Version: 5.3.0 - Support mémoire conversationnelle RAG
-// Date: 2025-12-20
+// Version: 6.0.1 - Phase 5 : Support generation_mode_ui
+// Date: 2024-12-30
+// Support des événements "step" pour transparence UX
 // ============================================================
 
 import { useState, useEffect, useRef } from 'react'
@@ -10,8 +11,95 @@ import { useAppStore } from '../stores/appStore'
 import { MessageBubble } from '../components/chat/MessageBubble'
 import { ChatInput } from '../components/chat/ChatInput'
 import { SaveConversationModal } from '../components/chat/SaveConversationModal'
-import { supabase } from '../lib/supabase'
-import type { Message } from '../types'
+import { sendMessageStream, type ChatResponse, type SSEStepEvent } from '../services/chat.service'
+import type { Message, MessageSource } from '../types'
+
+// ============================================================
+// COMPOSANT : Indicateur d'étapes
+// ============================================================
+
+interface StepsIndicatorProps {
+  steps: SSEStepEvent[]
+  isComplete: boolean
+}
+
+function StepsIndicator({ steps, isComplete }: StepsIndicatorProps) {
+  if (steps.length === 0) return null
+
+  return (
+    <div className="flex flex-col gap-1.5 mb-3">
+      {steps.map((step, index) => {
+        const isLast = index === steps.length - 1
+        const isDone = !isLast || isComplete
+        
+        return (
+          <div 
+            key={`${step.step}-${index}`}
+            className={`
+              flex items-center gap-2 text-xs transition-all duration-300
+              ${isDone ? 'text-stone-400 dark:text-stone-500' : 'text-stone-600 dark:text-stone-300'}
+            `}
+          >
+            {/* Icône : check si terminé, spinner si en cours */}
+            <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+              {isDone ? (
+                <svg 
+                  className="w-3.5 h-3.5 text-emerald-500" 
+                  fill="none" 
+                  viewBox="0 0 24 24" 
+                  stroke="currentColor"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2.5} 
+                    d="M5 13l4 4L19 7" 
+                  />
+                </svg>
+              ) : (
+                <svg 
+                  className="w-3.5 h-3.5 animate-spin text-stone-500" 
+                  fill="none" 
+                  viewBox="0 0 24 24"
+                >
+                  <circle 
+                    className="opacity-25" 
+                    cx="12" 
+                    cy="12" 
+                    r="10" 
+                    stroke="currentColor" 
+                    strokeWidth="3"
+                  />
+                  <path 
+                    className="opacity-75" 
+                    fill="currentColor" 
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+              )}
+            </span>
+            
+            {/* Message de l'étape */}
+            <span className={`${isDone ? 'line-through opacity-60' : 'font-medium'}`}>
+              {step.message}
+            </span>
+            
+            {/* Détails optionnels */}
+            {step.details && step.details.mode && !isDone && (
+              <span className="ml-1 px-1.5 py-0.5 bg-stone-100 dark:bg-stone-800 rounded text-[10px] font-mono">
+                {step.details.mode}
+              </span>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ============================================================
+// PAGE PRINCIPALE
+// ============================================================
 
 export function Dashboard() {
   const { profile } = useAuth()
@@ -23,7 +111,6 @@ export function Dashboard() {
     isAgentTyping,
     setIsAgentTyping,
     saveConversation,
-    // v5.3.0: Mémoire conversationnelle
     currentConversationId,
     setCurrentConversationId,
   } = useAppStore()
@@ -33,8 +120,14 @@ export function Dashboard() {
   
   // État pour la modale de sauvegarde
   const [showSaveModal, setShowSaveModal] = useState(false)
+  
+  // États pour le streaming
+  const [streamingContent, setStreamingContent] = useState('')
+  const [currentSteps, setCurrentSteps] = useState<SSEStepEvent[]>([])
+  const [stepsComplete, setStepsComplete] = useState(false)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
-  // Auto-scroll vers le bas quand nouveaux messages
+  // Auto-scroll vers le bas
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ 
@@ -42,9 +135,18 @@ export function Dashboard() {
         block: 'end'
       })
     }
-  }, [messages, isAgentTyping])
+  }, [messages, isAgentTyping, streamingContent, currentSteps])
 
-  // Générer un titre par défaut depuis le premier message user
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
+  }, [])
+
+  // Générer un titre par défaut
   const generateDefaultTitle = (): string => {
     const firstUserMessage = messages.find(m => m.role === 'user')
     if (firstUserMessage) {
@@ -71,10 +173,9 @@ export function Dashboard() {
     
     console.log('💾 [Dashboard] Sauvegarde OK, clearMessages...')
     await clearMessages()
-    console.log('💾 [Dashboard] Messages après clear:', useAppStore.getState().messages.length)
   }
 
-  // Envoyer un message
+  // Envoyer un message avec streaming
   const handleSendMessage = async (content: string, _files?: File[], deepAnalysis?: boolean) => {
     if (!content.trim()) return
     
@@ -82,6 +183,7 @@ export function Dashboard() {
       console.log('[Dashboard] Mode Deep Analysis activé pour les fichiers:', _files.map(f => f.name))
     }
 
+    // Message utilisateur
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -90,108 +192,143 @@ export function Dashboard() {
     }
     addMessage(userMessage)
 
+    // Reset états streaming
+    const assistantMessageId = crypto.randomUUID()
+    setStreamingContent('')
+    setCurrentSteps([])
+    setStepsComplete(false)
     setIsAgentTyping(true)
 
+    const userId = profile?.id || null
+    
+    console.log('[Dashboard] User ID:', userId)
+    console.log('[Dashboard] Conversation ID:', currentConversationId || 'nouvelle conversation')
+    console.log('[Dashboard] Démarrage streaming SSE...')
+
+    let fullResponse = ''
+    let receivedSources: MessageSource[] = []
+    let receivedMetadata: Partial<ChatResponse> = {}
+
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const userId = session?.user?.id || null
-      
-      console.log('[Dashboard] User ID:', userId)
-      console.log('[Dashboard] Conversation ID:', currentConversationId || 'nouvelle conversation')
-      
-      const { data, error } = await supabase.functions.invoke('baikal-brain', {
-        body: {
+      abortControllerRef.current = await sendMessageStream(
+        {
           query: content,
           user_id: userId,
           org_id: profile?.org_id || null,
           project_id: activeProject?.id || null,
-          // v5.3.0: Transmettre le conversation_id pour la mémoire
           conversation_id: currentConversationId,
-        }
-      })
-
-      if (error) {
-        console.error('[Dashboard] Erreur Edge Function:', error)
-        const errorMessage: Message = {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: 'Désolé, une erreur est survenue lors du traitement de votre demande. Veuillez réessayer.',
-          timestamp: new Date(),
-        }
-        addMessage(errorMessage)
-        setIsAgentTyping(false)
-        return
-      }
-
-      console.log('[Dashboard] Réponse Edge Function:', data)
-      
-      // v5.3.0: Stocker le conversation_id retourné par le backend
-      if (data?.conversation_id) {
-        console.log('[Dashboard] Conversation ID reçu:', data.conversation_id)
-        setCurrentConversationId(data.conversation_id)
-      }
-
-      let responseContent = ''
-      if (data) {
-        if (data.response) {
-          responseContent = typeof data.response === 'string' 
-            ? data.response 
-            : JSON.stringify(data.response)
-        } else if (data.destination) {
-          const destinationName = data.destination === 'BIBLIOTHECAIRE' 
-            ? 'Bibliothécaire' 
-            : data.destination === 'ANALYSTE' 
-              ? 'Analyste' 
-              : data.destination
-          
-          responseContent = `🔀 **Routeur** : Redirection vers l'agent **${destinationName}**\n\n${data.reasoning || data.message || 'Analyse de la requête en cours...'}`
-        } else {
-          responseContent = JSON.stringify(data, null, 2)
-        }
-      }
-
-      const assistantMessage: Message = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: responseContent || 'Aucune réponse reçue.',
-        timestamp: new Date(),
-        
-        knowledge_type: data?.knowledge_type,
-        validation_count: data?.validation_count || 0,
-        agent_source: data?.agent_source,
-        sources: data?.sources,
-        
-        documents_found: data?.documents_found,
-        qa_memory_found: data?.qa_memory_found,
-        processing_time_ms: data?.processing_time_ms,
-        prompt_used: data?.prompt_used,
-        prompt_resolution: data?.prompt_resolution,
-        
-        generation_mode: data?.generation_mode,
-        cache_status: data?.cache_status,
-        
-        can_vote: data?.can_vote ?? true,
-        vote_context: data?.vote_context || {
-          question: content,
-          answer: responseContent,
-          source_ids: data?.sources?.map((s: { id?: string }) => s.id).filter(Boolean) || []
         },
-        
-        user_vote: null,
-      }
-      
-      addMessage(assistantMessage)
+        {
+          // Callback pour les étapes
+          onStep: (step: SSEStepEvent) => {
+            console.log('[Dashboard] Step reçu:', step.step, step.message)
+            setCurrentSteps(prev => [...prev, step])
+            
+            // Marquer les étapes comme "en génération" quand on commence à générer
+            if (step.step === 'generating') {
+              setStepsComplete(true)
+            }
+          },
+
+          // Callback pour chaque token
+          onToken: (token: string) => {
+            fullResponse += token
+            setStreamingContent(prev => prev + token)
+          },
+
+          // Callback pour les sources
+          onSources: (sources: MessageSource[], metadata: Partial<ChatResponse>) => {
+            console.log('[Dashboard] Sources reçues:', sources.length)
+            console.log('[Dashboard] Metadata:', metadata)
+            receivedSources = sources
+            receivedMetadata = metadata
+
+            if (metadata.conversation_id) {
+              console.log('[Dashboard] Conversation ID reçu:', metadata.conversation_id)
+              setCurrentConversationId(metadata.conversation_id)
+            }
+          },
+
+          // Callback erreur
+          onError: (error: Error) => {
+            console.error('[Dashboard] Erreur streaming:', error)
+            
+            const errorMessage: Message = {
+              id: assistantMessageId,
+              role: 'assistant',
+              content: 'Désolé, une erreur est survenue lors du traitement de votre demande. Veuillez réessayer.',
+              timestamp: new Date(),
+            }
+            addMessage(errorMessage)
+            
+            setStreamingContent('')
+            setCurrentSteps([])
+            setStepsComplete(false)
+            setIsAgentTyping(false)
+          },
+
+          // Callback fin du stream
+          onComplete: () => {
+            console.log('[Dashboard] Stream terminé, longueur réponse:', fullResponse.length)
+            
+            const assistantMessage: Message = {
+              id: assistantMessageId,
+              role: 'assistant',
+              content: fullResponse || 'Aucune réponse reçue.',
+              timestamp: new Date(),
+              
+              knowledge_type: receivedMetadata.knowledge_type,
+              validation_count: receivedMetadata.validation_count || 0,
+              agent_source: receivedMetadata.agent_source,
+              sources: receivedSources.length > 0 ? receivedSources : undefined,
+              
+              documents_found: receivedMetadata.documents_found,
+              qa_memory_found: receivedMetadata.qa_memory_found,
+              processing_time_ms: receivedMetadata.processing_time_ms,
+              prompt_used: receivedMetadata.prompt_used,
+              prompt_resolution: receivedMetadata.prompt_resolution,
+              
+              generation_mode: receivedMetadata.generation_mode,
+              generation_mode_ui: receivedMetadata.generation_mode_ui,  // ← AJOUTÉ
+              cache_status: receivedMetadata.cache_status,
+              
+              can_vote: true,
+              vote_context: {
+                question: content,
+                answer: fullResponse,
+                source_ids: receivedSources
+                  .map(s => s.id)
+                  .filter((id): id is string => typeof id === 'string'),
+              },
+              
+              user_vote: null,
+            }
+            
+            addMessage(assistantMessage)
+            
+            // Reset états streaming
+            setStreamingContent('')
+            setCurrentSteps([])
+            setStepsComplete(false)
+            setIsAgentTyping(false)
+            abortControllerRef.current = null
+          },
+        }
+      )
       
     } catch (err) {
       console.error('[Dashboard] Erreur envoi message:', err)
       const errorMessage: Message = {
-        id: crypto.randomUUID(),
+        id: assistantMessageId,
         role: 'assistant',
         content: 'Une erreur inattendue est survenue. Veuillez réessayer.',
         timestamp: new Date(),
       }
       addMessage(errorMessage)
-    } finally {
+      
+      setStreamingContent('')
+      setCurrentSteps([])
+      setStepsComplete(false)
       setIsAgentTyping(false)
     }
   }
@@ -220,16 +357,34 @@ export function Dashboard() {
             />
           ))}
 
+          {/* Affichage du streaming avec étapes */}
           {isAgentTyping && (
             <div className="flex gap-4">
-              <div className="w-8 h-8 rounded-full bg-[#0B0F17] dark:bg-stone-200 flex items-center justify-center text-white dark:text-stone-800 font-serif italic text-sm flex-shrink-0 mt-1">
+              <div className="w-8 h-8 rounded-full bg-stone-800 dark:bg-stone-200 flex items-center justify-center text-white dark:text-stone-800 font-serif italic text-sm flex-shrink-0 mt-1">
                 A
               </div>
-              <div className="bg-white dark:bg-stone-800 border border-gray-200 dark:border-stone-700 p-4 rounded-r-xl rounded-bl-xl shadow-sm">
-                <div className="flex gap-1">
-                  <span className="w-2 h-2 bg-gray-300 dark:bg-stone-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-2 h-2 bg-gray-300 dark:bg-stone-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-2 h-2 bg-gray-300 dark:bg-stone-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              <div className="flex-1 max-w-2xl">
+                <div className="text-sm text-stone-700 dark:text-stone-200 leading-relaxed bg-white dark:bg-stone-900 border border-stone-100 dark:border-stone-800 p-4 rounded-r-xl rounded-bl-xl shadow-sm">
+                  
+                  {/* Indicateur d'étapes */}
+                  {currentSteps.length > 0 && (
+                    <StepsIndicator steps={currentSteps} isComplete={stepsComplete} />
+                  )}
+                  
+                  {/* Contenu en streaming */}
+                  {streamingContent ? (
+                    <div className="prose prose-sm prose-stone dark:prose-invert max-w-none font-serif whitespace-pre-wrap">
+                      {streamingContent}
+                      <span className="inline-block w-1.5 h-4 bg-stone-400 dark:bg-stone-500 animate-pulse ml-0.5 align-middle" />
+                    </div>
+                  ) : currentSteps.length === 0 ? (
+                    // Animation d'attente (avant la première étape)
+                    <div className="flex gap-1">
+                      <span className="w-2 h-2 bg-stone-300 dark:bg-stone-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-2 h-2 bg-stone-300 dark:bg-stone-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-2 h-2 bg-stone-300 dark:bg-stone-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>

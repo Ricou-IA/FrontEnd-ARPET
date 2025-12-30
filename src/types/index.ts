@@ -1,7 +1,7 @@
 // ============================================================
-// ARPET - Types unifiés v4.0
-// Version: 4.0.0 - Suppression Sandbox, ajout SavedConversation
-// Date: 2025-12-19
+// ARPET - Types unifiés v5.0
+// Version: 5.0.0 - Phase 5 : Support generation_mode_ui
+// Date: 2024-12-30
 // ============================================================
 
 // ============================================
@@ -101,7 +101,7 @@ export interface VoteContext {
   source_ids: string[];
 }
 
-// Message (v2 - rétro-compatible)
+// Message (v5 - avec generation_mode_ui)
 export interface Message {
   id: string;
   role: MessageRole;
@@ -123,6 +123,7 @@ export interface Message {
 
   // RAG Badge metadata
   generation_mode?: 'chunks' | 'gemini' | 'hybrid';
+  generation_mode_ui?: string;  // v5: "Full Document" ou "RAG Chunks"
   cache_status?: 'hit' | 'miss' | 'none';
 
   // Système de vote (v2)

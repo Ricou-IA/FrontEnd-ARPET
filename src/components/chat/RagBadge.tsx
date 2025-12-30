@@ -1,16 +1,17 @@
 // ============================================================
 // ARPET - RagBadge Component
-// Version: 1.0.0 - Quick Win: Affichage mode RAG + Cache status
-// Date: 2025-12-17
+// Version: 2.0.0 - Phase 5 : Support generation_mode_ui
+// Date: 2024-12-30
 // ============================================================
 
-import { Sparkles, Database, Zap } from 'lucide-react'
+import { Database, Zap, FileText } from 'lucide-react'
 
 export type GenerationMode = 'chunks' | 'gemini' | 'hybrid' | undefined
 export type CacheStatus = 'hit' | 'miss' | 'none' | undefined
 
 interface RagBadgeProps {
   generationMode?: GenerationMode
+  generationModeUi?: string  // v2.0.0: "Full Document" ou "RAG Chunks"
   cacheStatus?: CacheStatus
   processingTimeMs?: number
   documentsFound?: number
@@ -19,46 +20,72 @@ interface RagBadgeProps {
 
 export function RagBadge({ 
   generationMode, 
+  generationModeUi,
   cacheStatus, 
   processingTimeMs,
   documentsFound,
   className = '' 
 }: RagBadgeProps) {
   // Ne rien afficher si pas d'info
-  if (!generationMode) return null
+  if (!generationMode && !generationModeUi) return null
 
   const isGemini = generationMode === 'gemini'
+  const isFullDocument = generationModeUi === 'Full Document' || isGemini
 
-  // Couleurs selon le mode
+  // Styles selon le mode
   const modeStyles = {
-    gemini: {
-      bg: 'bg-violet-50',
-      border: 'border-violet-200',
-      text: 'text-violet-700',
-      icon: <Sparkles className="w-3 h-3" />,
-      label: 'Gemini'
+    fullDocument: {
+      bg: 'bg-violet-50 dark:bg-violet-900/30',
+      border: 'border-violet-200 dark:border-violet-800',
+      text: 'text-violet-700 dark:text-violet-400',
+      icon: <FileText className="w-3 h-3" />,
+      label: 'Full Document'
     },
-    chunks: {
-      bg: 'bg-sky-50',
-      border: 'border-sky-200',
-      text: 'text-sky-700',
+    ragChunks: {
+      bg: 'bg-sky-50 dark:bg-sky-900/30',
+      border: 'border-sky-200 dark:border-sky-800',
+      text: 'text-sky-700 dark:text-sky-400',
       icon: <Database className="w-3 h-3" />,
       label: 'RAG Chunks'
     },
     hybrid: {
-      bg: 'bg-amber-50',
-      border: 'border-amber-200',
-      text: 'text-amber-700',
+      bg: 'bg-amber-50 dark:bg-amber-900/30',
+      border: 'border-amber-200 dark:border-amber-800',
+      text: 'text-amber-700 dark:text-amber-400',
       icon: <Zap className="w-3 h-3" />,
       label: 'Hybride'
     }
   }
 
-  const style = modeStyles[generationMode] || modeStyles.chunks
+  // Déterminer le style à utiliser
+  let style = modeStyles.ragChunks // Par défaut
+  
+  if (generationModeUi) {
+    // Utiliser generationModeUi en priorité
+    if (generationModeUi === 'Full Document') {
+      style = modeStyles.fullDocument
+    } else if (generationModeUi === 'RAG Chunks') {
+      style = modeStyles.ragChunks
+    } else if (generationModeUi === 'Hybride') {
+      style = modeStyles.hybrid
+    }
+  } else if (generationMode) {
+    // Fallback sur generationMode
+    if (generationMode === 'gemini') {
+      style = modeStyles.fullDocument
+    } else if (generationMode === 'chunks') {
+      style = modeStyles.ragChunks
+    } else if (generationMode === 'hybrid') {
+      style = modeStyles.hybrid
+    }
+  }
 
-  // Cache status badge
+  // Label à afficher (priorité à generationModeUi)
+  const displayLabel = generationModeUi || style.label
+
+  // Cache status badge (uniquement pour Full Document)
   const renderCacheStatus = () => {
-    if (!isGemini || !cacheStatus || cacheStatus === 'none') return null
+    if (!isFullDocument || !cacheStatus || cacheStatus === 'none') return null
 
     const isHit = cacheStatus === 'hit'
     
@@ -66,10 +93,10 @@ export function RagBadge({
       <span 
         className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
           isHit 
-            ? 'bg-green-100 text-green-700' 
-            : 'bg-orange-100 text-orange-700'
+            ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400' 
+            : 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400'
         }`}
-        title={isHit ? 'Cache Google utilisé (économie -75%)' : 'Nouveau cache créé'}
+        title={isHit ? 'Documents en cache (lecture rapide)' : 'Documents chargés'}
       >
         {isHit ? 'Cache ✓' : 'New'}
       </span>
@@ -81,25 +108,25 @@ export function RagBadge({
       {/* Badge Mode */}
       <span 
         className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-medium ${style.bg} ${style.border} ${style.text}`}
-        title={`Mode de génération: ${style.label}`}
+        title={`Mode: ${displayLabel}`}
       >
         {style.icon}
-        {style.label}
+        {displayLabel}
       </span>
 
-      {/* Cache Status (Gemini only) */}
+      {/* Cache Status (Full Document only) */}
       {renderCacheStatus()}
 
       {/* Documents count */}
       {documentsFound !== undefined && documentsFound > 0 && (
-        <span className="text-[10px] text-stone-400">
+        <span className="text-[10px] text-stone-400 dark:text-stone-500">
           {documentsFound} doc{documentsFound > 1 ? 's' : ''}
         </span>
       )}
 
       {/* Processing time */}
       {processingTimeMs !== undefined && processingTimeMs > 0 && (
-        <span className="text-[10px] text-stone-400">
+        <span className="text-[10px] text-stone-400 dark:text-stone-500">
           {processingTimeMs < 1000 
             ? `${processingTimeMs}ms` 
             : `${(processingTimeMs / 1000).toFixed(1)}s`
