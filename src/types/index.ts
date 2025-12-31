@@ -1,7 +1,7 @@
 // ============================================================
-// ARPET - Types unifiés v5.0
-// Version: 5.0.0 - Phase 5 : Support generation_mode_ui
-// Date: 2024-12-30
+// ARPET - Types unifiés v6.0.1
+// Version: 6.0.1 - Phase 6 : Mémoire Collective (fix compat)
+// Date: 2024-12-31
 // ============================================================
 
 // ============================================
@@ -56,7 +56,7 @@ export interface Project {
 // ============================================
 export type MessageRole = 'user' | 'assistant';
 
-// Types de connaissance étendus (v2)
+// Types de connaissance étendus (v6 - avec mémoire)
 export type KnowledgeType = 
   | 'none'              // Aucun document trouvé
   | 'shared'            // Documents partagés (général)
@@ -65,43 +65,52 @@ export type KnowledgeType =
   | 'personal'          // Documents de l'utilisateur
   | 'global'            // Global (rétro-compat)
   | 'new'               // Nouvelle réponse (rétro-compat)
-  | 'team_validated'    // Réponse validée par l'équipe (≥2 votes)
-  | 'expert_validated'; // Réponse validée par experts (≥5 votes)
+  | 'team_validated'    // Réponse validée par l'équipe (≥3 votes)
+  | 'expert_validated'  // FAQ Expert pré-enregistrée
+  | 'memory';           // v6: Réponse depuis mémoire collective
 
 export type AgentSource = 'librarian' | 'analyst' | 'user';
 
-// Types de sources (v2)
+// Types de sources (v6 - avec qa_memory)
 export type SourceType = 'document' | 'qa_memory';
 
-// Authority labels pour qa_memory (v2)
+// Authority labels pour qa_memory (v6)
 export type AuthorityLabel = 'user' | 'team' | 'expert' | 'flagged';
 
-// Source de message (v2 - rétro-compatible)
+// v6.0.1: Mode de génération (inclut memory)
+export type GenerationMode = 'chunks' | 'gemini' | 'hybrid' | 'memory';
+
+// Source de message (v6 - rétro-compatible)
 export interface MessageSource {
-  // Champs existants (rétro-compat)
-  document_id?: string;
-  document_name?: string;
-  chunk_id?: string;
-  score?: number;
-  // Nouveaux champs v2
-  id?: string;
+  // Identifiants
+  id?: string | number;
   type?: SourceType;
+  source_file_id?: string | null;  // v6.0.1: Accepte undefined et null
+  
+  // Affichage
+  document_name?: string;
   name?: string;
-  content_preview?: string;
+  content_preview?: string | null;
+  score?: number;
+  layer?: string;
+  
+  // Rétro-compat
+  document_id?: string;
+  chunk_id?: string;
+  
+  // QA Memory spécifique
   authority_label?: AuthorityLabel;
   qa_id?: string;
-  // ID du fichier source pour Split View
-  source_file_id?: string;
 }
 
-// Contexte de vote (v2)
+// v6.0.1: Contexte pour voter sur une nouvelle réponse (rétro-compat)
 export interface VoteContext {
   question: string;
   answer: string;
-  source_ids: string[];
+  source_ids: (string | undefined)[];  // Rétro-compat avec code existant
 }
 
-// Message (v5 - avec generation_mode_ui)
+// Message (v6 - avec mémoire collective)
 export interface Message {
   id: string;
   role: MessageRole;
@@ -114,7 +123,7 @@ export interface Message {
   sources?: MessageSource[];
   agent_source?: AgentSource;
   
-  // Nouveaux champs v2
+  // Infos retrieval
   documents_found?: number;
   qa_memory_found?: number;
   processing_time_ms?: number;
@@ -122,13 +131,40 @@ export interface Message {
   prompt_resolution?: string;
 
   // RAG Badge metadata
-  generation_mode?: 'chunks' | 'gemini' | 'hybrid';
-  generation_mode_ui?: string;  // v5: "Full Document" ou "RAG Chunks"
+  generation_mode?: GenerationMode;
+  generation_mode_ui?: string;  // "Full Document", "RAG Chunks", "Mémoire Collective"
   cache_status?: 'hit' | 'miss' | 'none';
 
-  // Système de vote (v2)
+  // =============================================
+  // v6: MÉMOIRE COLLECTIVE
+  // =============================================
+  
+  /** true si la réponse vient de qa_memory (pas de RAG) */
+  from_memory?: boolean;
+  
+  /** ID de la qa_memory utilisée (si from_memory=true) ou créée (après vote) */
+  qa_memory_id?: string | null;
+  
+  /** Similarité du match mémoire (0-1) */
+  qa_memory_similarity?: number;
+  
+  /** true si FAQ Expert */
+  qa_memory_is_expert?: boolean;
+  
+  /** Score de confiance (nombre de votes positifs) */
+  qa_memory_trust_score?: number;
+
+  // =============================================
+  // SYSTÈME DE VOTE
+  // =============================================
+  
+  /** true si l'utilisateur peut voter sur cette réponse */
   can_vote?: boolean;
+  
+  /** Contexte pour créer une qa_memory lors du vote (si from_memory=false) */
   vote_context?: VoteContext;
+  
+  /** Vote de l'utilisateur courant sur ce message */
   user_vote?: 'up' | 'down' | null;
 
   // État UI
@@ -157,35 +193,38 @@ export interface LibrarianResponse {
 }
 
 // ============================================
-// QA MEMORY (Knowledge Hub)
+// VOTE (v6)
+// ============================================
+
+export interface VoteResult {
+  success: boolean;
+  action: string;
+  qa_id: string | null;
+  trust_score: number;
+  message: string;
+  error?: string;
+}
+
+// ============================================
+// QA MEMORY (v6)
 // ============================================
 export interface QAMemory {
   id: string;
   org_id: string;
-  document_id?: number;
+  project_id: string | null;
   question_text: string;
   answer_text: string;
+  embedding?: number[];
+  is_expert_faq: boolean;
+  expert_source: string | null;
   trust_score: number;
+  validators_ids: string[];
+  source_file_ids: string[] | null;
   usage_count: number;
-  authority_label: AuthorityLabel;
-  target_apps?: string[];
-  target_projects?: string[];
-  validators_ids?: string[];
-  created_by?: string;
+  last_accessed_at: string | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
-  last_accessed_at?: string;
-  flagged_at?: string | null;
-  flagged_by?: string | null;
-}
-
-// Résultat d'un vote (v2)
-export interface VoteResult {
-  success: boolean;
-  error?: 'ALREADY_VOTED' | 'QA_NOT_FOUND' | string;
-  message: string;
-  new_score?: number;
-  new_label?: AuthorityLabel;
 }
 
 // ============================================
@@ -647,6 +686,8 @@ export function getKnowledgeTypeIcon(type?: KnowledgeType): string {
       return '⭐';
     case 'team_validated':
       return '✓';
+    case 'memory':
+      return '🧠';
     case 'personal':
       return '👤';
     case 'project':

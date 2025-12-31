@@ -1,13 +1,19 @@
 // ============================================================
 // ARPET - MessageBubble Component
-// Version: 7.0.0 - Phase 5 : Sources filtrées côté backend
-// Date: 2024-12-30
+// Version: 8.0.1 - Phase 6 : Mémoire Collective (fix props)
+// Date: 2024-12-31
+// ============================================================
+//
+// Changements v8.0.1:
+// - project_id passé en props (au lieu du store)
+// - Compatible avec types v6.0
+//
 // ============================================================
 
 import { useState, useCallback } from 'react'
 import { 
-  Copy, ThumbsUp, ThumbsDown, Zap, Check, 
-  AlertCircle, CheckCircle, Loader2, Eye 
+  Copy, ThumbsUp, ThumbsDown, Check, 
+  AlertCircle, CheckCircle, Loader2, Eye, Brain 
 } from 'lucide-react'
 import type { Message, MessageSource, ViewerDocument } from '../../types'
 import { getAuthorityBadge } from '../../types'
@@ -19,10 +25,15 @@ import { useAppStore } from '../../stores/appStore'
 
 interface MessageBubbleProps {
   message: Message
+  /** Question posée par l'utilisateur (pour vote_up_new) */
+  userQuestion?: string
+  /** Project ID courant (pour vote_up_new) */
+  projectId?: string | null
+  /** Callback après vote réussi */
   onVoteComplete?: (message: Message, voteType: 'up' | 'down', qaId?: string) => void
 }
 
-export function MessageBubble({ message, onVoteComplete }: MessageBubbleProps) {
+export function MessageBubble({ message, userQuestion, projectId, onVoteComplete }: MessageBubbleProps) {
   const { profile } = useAuth()
   const { openViewer } = useAppStore()
   
@@ -30,7 +41,7 @@ export function MessageBubble({ message, onVoteComplete }: MessageBubbleProps) {
   const [isVoting, setIsVoting] = useState(false)
   const [voteStatus, setVoteStatus] = useState<'none' | 'up' | 'down'>(message.user_vote || 'none')
   const [voteError, setVoteError] = useState<string | null>(null)
-  const [localValidationCount, setLocalValidationCount] = useState(message.validation_count || 0)
+  const [localTrustScore, setLocalTrustScore] = useState(message.qa_memory_trust_score || 0)
   const [copied, setCopied] = useState(false)
 
   // ================================================================
@@ -62,11 +73,19 @@ export function MessageBubble({ message, onVoteComplete }: MessageBubbleProps) {
     }
   }, [message.content])
 
+  /**
+   * Vote positif (👍)
+   * 
+   * 3 cas possibles:
+   * 1. Réponse depuis mémoire (from_memory=true) → voteUpExisting
+   * 2. Réponse RAG avec qa_memory_id (déjà votée) → voteUpExisting
+   * 3. Nouvelle réponse RAG → voteUpNew (crée qa_memory)
+   */
   const handleVoteUp = useCallback(async () => {
     if (isVoting || voteStatus !== 'none') return
     
-    if (!message.can_vote && !message.vote_context) {
-      setVoteError('Vote non disponible pour ce message')
+    if (!profile?.org_id) {
+      setVoteError('Connexion requise pour voter')
       return
     }
 
@@ -74,34 +93,56 @@ export function MessageBubble({ message, onVoteComplete }: MessageBubbleProps) {
     setVoteError(null)
 
     try {
-      const existingQaId = message.sources?.find(s => s.qa_id)?.qa_id
-
-      if (existingQaId) {
-        const result = await voteService.voteUp(existingQaId)
+      // Cas 1 & 2: qa_memory existe déjà
+      if (message.qa_memory_id) {
+        console.log('[MessageBubble] voteUpExisting:', message.qa_memory_id)
+        
+        const result = await voteService.voteUpExisting(message.qa_memory_id)
         
         if (result.success) {
           setVoteStatus('up')
-          setLocalValidationCount(prev => prev + 1)
-          onVoteComplete?.(message, 'up', existingQaId)
+          setLocalTrustScore(result.trust_score)
+          onVoteComplete?.(message, 'up', result.qa_id || undefined)
         } else {
-          setVoteError(result.message)
+          setVoteError(result.error === 'ALREADY_VOTED' 
+            ? 'Vous avez déjà voté pour cette réponse' 
+            : result.message)
         }
-      } else if (message.vote_context && profile?.org_id) {
-        const result = await voteService.voteUpNewAnswer(
-          message.vote_context,
-          profile.org_id
-        )
+      } 
+      // Cas 3: Nouvelle réponse RAG → créer qa_memory
+      else {
+        if (!userQuestion) {
+          setVoteError('Question non disponible')
+          return
+        }
+
+        // Extraire les source_file_ids des sources
+        const sourceFileIds = message.sources
+          ?.filter(s => s.source_file_id)
+          .map(s => s.source_file_id as string) || []
+
+        console.log('[MessageBubble] voteUpNew:', {
+          question: userQuestion.substring(0, 50) + '...',
+          org_id: profile.org_id,
+          project_id: projectId,
+          source_file_ids: sourceFileIds
+        })
+
+        const result = await voteService.voteUpNew({
+          question: userQuestion,
+          answer: message.content,
+          org_id: profile.org_id,
+          project_id: projectId || null,
+          source_file_ids: sourceFileIds,
+        })
 
         if (result.success) {
           setVoteStatus('up')
-          setLocalValidationCount(prev => prev + 1)
-          const qaId = 'qa_id' in result ? result.qa_id : undefined
-          onVoteComplete?.(message, 'up', qaId)
+          setLocalTrustScore(result.trust_score)
+          onVoteComplete?.(message, 'up', result.qa_id || undefined)
         } else {
           setVoteError(result.message)
         }
-      } else {
-        setVoteError('Connexion requise pour voter')
       }
     } catch (err) {
       setVoteError('Erreur lors du vote')
@@ -109,29 +150,36 @@ export function MessageBubble({ message, onVoteComplete }: MessageBubbleProps) {
     } finally {
       setIsVoting(false)
     }
-  }, [isVoting, voteStatus, message, profile, onVoteComplete])
+  }, [isVoting, voteStatus, message, profile, projectId, userQuestion, onVoteComplete])
 
+  /**
+   * Vote négatif (👎)
+   * 
+   * Seulement possible si qa_memory_id existe (réponse en mémoire)
+   */
   const handleVoteDown = useCallback(async () => {
     if (isVoting || voteStatus !== 'none') return
     
+    // Seules les réponses avec qa_memory_id peuvent être signalées
+    if (!message.qa_memory_id) {
+      setVoteError('Seules les réponses validées peuvent être signalées')
+      return
+    }
+
     setIsVoting(true)
     setVoteError(null)
 
     try {
-      const existingQaId = message.sources?.find(s => s.qa_id)?.qa_id
-
-      if (existingQaId) {
-        const result = await voteService.voteDown(existingQaId)
-        
-        if (result.success) {
-          setVoteStatus('down')
-          setLocalValidationCount(prev => Math.max(0, prev - 1))
-          onVoteComplete?.(message, 'down')
-        } else {
-          setVoteError(result.message)
-        }
+      console.log('[MessageBubble] voteDown:', message.qa_memory_id)
+      
+      const result = await voteService.voteDown(message.qa_memory_id)
+      
+      if (result.success) {
+        setVoteStatus('down')
+        setLocalTrustScore(result.trust_score)
+        onVoteComplete?.(message, 'down')
       } else {
-        setVoteError('Seules les réponses validées peuvent être signalées')
+        setVoteError(result.message)
       }
     } catch (err) {
       setVoteError('Erreur lors du signalement')
@@ -145,93 +193,73 @@ export function MessageBubble({ message, onVoteComplete }: MessageBubbleProps) {
   // RENDER HELPERS
   // ================================================================
 
+  /**
+   * Header selon le type de réponse
+   */
   const renderKnowledgeHeader = () => {
-    const { knowledge_type } = message
-
-    if (knowledge_type === 'expert_validated') {
+    // v8.0.0: Réponse depuis mémoire collective
+    if (message.from_memory) {
+      if (message.qa_memory_is_expert) {
+        return (
+          <div className="flex items-center gap-2 mb-3 pb-2 border-b border-amber-100 dark:border-amber-900/30">
+            <span className="bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+              ⭐ FAQ Expert
+            </span>
+            <span className="text-[10px] text-stone-400 dark:text-stone-500">
+              Réponse instantanée
+            </span>
+          </div>
+        )
+      }
+      
       return (
-        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-amber-100 dark:border-amber-900/30">
-          <span className="bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-            ⭐ Réponse Expert
+        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-green-100 dark:border-green-900/30">
+          <span className="bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+            <Brain className="w-2.5 h-2.5" />
+            Mémoire Collective
           </span>
-          {localValidationCount > 0 && (
+          {localTrustScore > 0 && (
             <span className="text-[10px] text-stone-400 dark:text-stone-500 font-medium">
-              Validée par {localValidationCount} expert{localValidationCount > 1 ? 's' : ''}
+              {localTrustScore} validation{localTrustScore > 1 ? 's' : ''}
             </span>
           )}
         </div>
       )
     }
 
-    if (knowledge_type === 'team_validated') {
+    // Réponses validées par l'équipe (depuis RAG mais avec qa_memory)
+    if (message.knowledge_type === 'team_validated' || localTrustScore >= 3) {
       return (
         <div className="flex items-center gap-2 mb-3 pb-2 border-b border-green-100 dark:border-green-900/30">
           <span className="bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
             <Check className="w-2.5 h-2.5" />
             Validée par l'équipe
           </span>
-          {localValidationCount > 0 && (
+          {localTrustScore > 0 && (
             <span className="text-[10px] text-stone-400 dark:text-stone-500 font-medium">
-              {localValidationCount} validation{localValidationCount > 1 ? 's' : ''}
+              {localTrustScore} validation{localTrustScore > 1 ? 's' : ''}
             </span>
           )}
         </div>
       )
     }
 
-    if (knowledge_type === 'shared') {
-      return (
-        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-stone-100 dark:border-stone-800">
-          <span className="bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-100 dark:border-green-800 text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-            <Zap className="w-2.5 h-2.5" />
-            Savoir Partagé
-          </span>
-          {localValidationCount > 0 && (
-            <span className="text-[10px] text-stone-400 dark:text-stone-500 font-medium">
-              Validé par {localValidationCount} conducteur{localValidationCount > 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
-      )
-    }
-
-    if (knowledge_type === 'project') {
-      return (
-        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-blue-100 dark:border-blue-900/30">
-          <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
-            🏗️ Document Chantier
-          </span>
-        </div>
-      )
-    }
-
-    if (knowledge_type === 'organization') {
-      return (
-        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-purple-100 dark:border-purple-900/30">
-          <span className="bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 border border-purple-100 dark:border-purple-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
-            🏢 Document Entreprise
-          </span>
-        </div>
-      )
-    }
-
-    if (!knowledge_type || knowledge_type === 'none') {
-      return (
-        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-blue-100 dark:border-blue-900/30">
-          <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
-            ✨ Nouvelle réponse
-          </span>
-          <span className="text-[10px] text-stone-400 dark:text-stone-500">
-            Votez 👍 si cette réponse vous aide
-          </span>
-        </div>
-      )
-    }
-
-    return null
+    // Nouvelle réponse RAG
+    return (
+      <div className="flex items-center gap-2 mb-3 pb-2 border-b border-blue-100 dark:border-blue-900/30">
+        <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
+          ✨ Nouvelle réponse
+        </span>
+        <span className="text-[10px] text-stone-400 dark:text-stone-500">
+          Votez 👍 si cette réponse vous aide
+        </span>
+      </div>
+    )
   }
 
-  // v7.0.0: Affichage direct des sources (filtrage fait côté backend)
+  /**
+   * Affichage des sources
+   */
   const renderSources = () => {
     if (!message.sources || message.sources.length === 0) return null
 
@@ -254,6 +282,10 @@ export function MessageBubble({ message, onVoteComplete }: MessageBubbleProps) {
   // ================================================================
   // RENDER MESSAGE ASSISTANT
   // ================================================================
+  
+  // Déterminer si le bouton 👎 est actif
+  const canVoteDown = Boolean(message.qa_memory_id)
+  
   return (
     <div className="flex gap-4 group">
       <div className="w-8 h-8 rounded-full bg-stone-800 dark:bg-stone-200 flex items-center justify-center text-white dark:text-stone-800 font-serif italic text-sm flex-shrink-0 mt-1">
@@ -265,7 +297,7 @@ export function MessageBubble({ message, onVoteComplete }: MessageBubbleProps) {
           
           {renderKnowledgeHeader()}
 
-          {/* v7.0.0: Support generation_mode_ui */}
+          {/* Badge RAG (mode de génération) */}
           {(message.generation_mode || message.generation_mode_ui) && (
             <RagBadge
               generationMode={message.generation_mode}
@@ -277,6 +309,7 @@ export function MessageBubble({ message, onVoteComplete }: MessageBubbleProps) {
             />
           )}
 
+          {/* Contenu du message */}
           <div 
             className="prose prose-sm prose-stone dark:prose-invert max-w-none font-serif"
             dangerouslySetInnerHTML={{ __html: formatContent(message.content) }}
@@ -284,6 +317,7 @@ export function MessageBubble({ message, onVoteComplete }: MessageBubbleProps) {
 
           {renderSources()}
 
+          {/* Erreur de vote */}
           {voteError && (
             <div className="mt-3 flex items-center gap-1.5 text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-2 py-1.5 rounded">
               <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
@@ -298,7 +332,9 @@ export function MessageBubble({ message, onVoteComplete }: MessageBubbleProps) {
           )}
         </div>
 
+        {/* Barre d'actions */}
         <div className="flex items-center justify-between mt-2">
+          {/* Bouton Copier */}
           <div className="flex gap-2">
             <button 
               onClick={handleCopy}
@@ -318,7 +354,9 @@ export function MessageBubble({ message, onVoteComplete }: MessageBubbleProps) {
             </button>
           </div>
 
+          {/* Boutons de vote */}
           <div className="flex items-center gap-1">
+            {/* Vote Up */}
             <button 
               onClick={handleVoteUp}
               disabled={isVoting || voteStatus !== 'none'}
@@ -342,24 +380,30 @@ export function MessageBubble({ message, onVoteComplete }: MessageBubbleProps) {
               )}
             </button>
             
+            {/* Compteur */}
             <span className={`text-xs font-bold min-w-[20px] text-center ${
-              localValidationCount > 0 ? 'text-green-600 dark:text-green-400' : 'text-stone-400 dark:text-stone-500'
+              localTrustScore > 0 ? 'text-green-600 dark:text-green-400' : 'text-stone-400 dark:text-stone-500'
             }`}>
-              {localValidationCount}
+              {localTrustScore > 0 ? localTrustScore : ''}
             </span>
             
+            {/* Vote Down */}
             <button 
               onClick={handleVoteDown}
-              disabled={isVoting || voteStatus !== 'none'}
+              disabled={isVoting || voteStatus !== 'none' || !canVoteDown}
               className={`p-1.5 rounded-full transition-all ${
                 voteStatus === 'down'
                   ? 'bg-red-100 dark:bg-red-900/40 text-red-500 dark:text-red-400'
+                  : !canVoteDown
+                  ? 'text-stone-200 dark:text-stone-700 cursor-not-allowed opacity-50'
                   : voteStatus !== 'none'
                   ? 'text-stone-200 dark:text-stone-700 cursor-not-allowed'
                   : 'hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 text-stone-400 dark:text-stone-500'
               }`}
               title={
-                voteStatus === 'down' 
+                !canVoteDown
+                  ? 'Seules les réponses validées peuvent être signalées'
+                  : voteStatus === 'down' 
                   ? 'Vous avez signalé cette réponse' 
                   : 'Signaler une réponse incorrecte'
               }
@@ -374,7 +418,7 @@ export function MessageBubble({ message, onVoteComplete }: MessageBubbleProps) {
 }
 
 // ============================================================
-// COMPOSANT SOURCE BADGE (avec bouton Voir)
+// COMPOSANT SOURCE BADGE
 // ============================================================
 
 interface SourceBadgeProps {
@@ -440,18 +484,19 @@ function SourceBadge({ source, onOpenViewer }: SourceBadgeProps) {
     }
   }
 
+  // Badge pour qa_memory
   if (isQAMemory) {
     return (
       <span 
         className={`text-[10px] px-2 py-0.5 rounded flex items-center gap-1 cursor-help ${
           authorityBadge?.color || 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400'
         }`}
-        title={source.content_preview || 'Réponse validée par la communauté'}
+        title={source.content_preview || 'Réponse validée'}
       >
         {source.authority_label === 'expert' && '⭐'}
         {source.authority_label === 'team' && '✓'}
         <span className="truncate max-w-[120px]">
-          {source.name || 'Réponse validée'}
+          {source.document_name || source.name || 'Mémoire collective'}
         </span>
         {source.score !== undefined && (
           <span className="opacity-60">({Math.round(source.score * 100)}%)</span>
@@ -460,6 +505,7 @@ function SourceBadge({ source, onOpenViewer }: SourceBadgeProps) {
     )
   }
 
+  // Badge pour document
   const displayName = source.document_name || source.name || 'Document'
   
   return (

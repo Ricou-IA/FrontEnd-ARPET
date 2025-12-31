@@ -1,22 +1,40 @@
 // ============================================================
 // ARPET - Vote Service
-// Version: 2.0.0 - Migration vers schémas dédiés + fix RPC args
-// Date: 2025-12-11
+// Version: 3.0.0 - Refonte Phase 6 : Edge Function baikal-vote
+// Date: 2024-12-31
+// ============================================================
+// 
+// Ce service appelle l'Edge Function baikal-vote pour gérer
+// les votes sur les réponses (mémoire collective).
+//
+// Actions disponibles:
+// - voteUpNew: Nouvelle réponse RAG → crée qa_memory + premier vote
+// - voteUpExisting: Réponse depuis mémoire → incrémente trust_score
+// - voteDown: Signaler une réponse incorrecte → décrémente trust_score
+//
 // ============================================================
 
 import { supabase } from '@/lib/supabase';
-import type { VoteResult, VoteContext } from '@/types';
 
 // ============================================================
 // TYPES
 // ============================================================
 
-interface CreateQAMemoryParams {
-  question_text: string;
-  answer_text: string;
-  source_document_ids?: string[];
+export interface VoteResult {
+  success: boolean;
+  action: string;
+  qa_id: string | null;
+  trust_score: number;
+  message: string;
+  error?: string;
+}
+
+export interface VoteUpNewParams {
+  question: string;
+  answer: string;
   org_id: string;
-  target_projects?: string[];
+  project_id?: string | null;
+  source_file_ids?: string[];
 }
 
 // ============================================================
@@ -32,239 +50,164 @@ async function getCurrentUserId(): Promise<string> {
 }
 
 // ============================================================
-// VOTE POUR UNE RÉPONSE EXISTANTE
+// VOTE UP NEW - Nouvelle réponse (crée qa_memory)
 // ============================================================
 
 /**
- * Vote positif pour une qa_memory existante
- * Incrémente trust_score et peut promouvoir authority_label
+ * Vote positif sur une nouvelle réponse RAG (pas encore en mémoire)
+ * Crée une entrée qa_memory avec embedding + premier vote
+ * 
+ * @param params - Question, réponse, org_id, project_id (optionnel), source_file_ids (optionnel)
+ * @returns VoteResult avec qa_id de la nouvelle entrée
  */
-export async function voteUp(qaId: string): Promise<VoteResult> {
+export async function voteUpNew(params: VoteUpNewParams): Promise<VoteResult> {
   try {
     const userId = await getCurrentUserId();
     
-    const { data, error } = await supabase.rpc('vote_for_answer', {
-      p_row_id: qaId,
-      p_user_id: userId
+    console.log('[vote.service] voteUpNew:', params.question.substring(0, 50) + '...');
+
+    const { data, error } = await supabase.functions.invoke('baikal-vote', {
+      body: {
+        action: 'vote_up_new',
+        user_id: userId,
+        question: params.question,
+        answer: params.answer,
+        org_id: params.org_id,
+        project_id: params.project_id || null,
+        source_file_ids: params.source_file_ids || null,
+      }
     });
 
     if (error) {
-      console.error('voteUp error:', error);
-      
-      // Gérer le cas "déjà voté"
-      if (error.message?.includes('already voted') || error.code === 'P0001') {
-        return {
-          success: false,
-          error: 'ALREADY_VOTED',
-          message: 'Vous avez déjà voté pour cette réponse'
-        };
-      }
-      
+      console.error('[vote.service] voteUpNew error:', error);
       return {
         success: false,
+        action: 'vote_up_new',
+        qa_id: null,
+        trust_score: 0,
+        message: 'Erreur lors de la validation',
         error: error.message,
-        message: 'Erreur lors du vote'
       };
     }
 
-    return {
-      success: true,
-      message: 'Vote enregistré',
-      new_score: data?.new_score,
-      new_label: data?.new_label
-    };
+    console.log('[vote.service] voteUpNew success:', data);
+    return data as VoteResult;
+    
   } catch (err) {
-    console.error('voteUp exception:', err);
+    console.error('[vote.service] voteUpNew exception:', err);
     return {
       success: false,
-      error: String(err),
-      message: 'Erreur inattendue'
+      action: 'vote_up_new',
+      qa_id: null,
+      trust_score: 0,
+      message: 'Erreur inattendue',
+      error: err instanceof Error ? err.message : String(err),
     };
   }
 }
 
+// ============================================================
+// VOTE UP EXISTING - Réponse déjà en mémoire
+// ============================================================
+
 /**
- * Vote négatif pour une qa_memory
- * Décrémente trust_score et peut flaguer la réponse
+ * Vote positif sur une réponse déjà en mémoire collective
+ * Incrémente trust_score (si pas déjà voté)
+ * 
+ * @param qaId - ID de la qa_memory existante
+ * @returns VoteResult avec nouveau trust_score
+ */
+export async function voteUpExisting(qaId: string): Promise<VoteResult> {
+  try {
+    const userId = await getCurrentUserId();
+    
+    console.log('[vote.service] voteUpExisting:', qaId);
+
+    const { data, error } = await supabase.functions.invoke('baikal-vote', {
+      body: {
+        action: 'vote_up_existing',
+        user_id: userId,
+        qa_id: qaId,
+      }
+    });
+
+    if (error) {
+      console.error('[vote.service] voteUpExisting error:', error);
+      return {
+        success: false,
+        action: 'vote_up_existing',
+        qa_id: qaId,
+        trust_score: 0,
+        message: 'Erreur lors du vote',
+        error: error.message,
+      };
+    }
+
+    console.log('[vote.service] voteUpExisting success:', data);
+    return data as VoteResult;
+    
+  } catch (err) {
+    console.error('[vote.service] voteUpExisting exception:', err);
+    return {
+      success: false,
+      action: 'vote_up_existing',
+      qa_id: qaId,
+      trust_score: 0,
+      message: 'Erreur inattendue',
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+// ============================================================
+// VOTE DOWN - Signaler une réponse incorrecte
+// ============================================================
+
+/**
+ * Vote négatif sur une réponse en mémoire collective
+ * Décrémente trust_score
+ * 
+ * @param qaId - ID de la qa_memory à signaler
+ * @returns VoteResult avec nouveau trust_score
  */
 export async function voteDown(qaId: string): Promise<VoteResult> {
   try {
     const userId = await getCurrentUserId();
     
-    const { data, error } = await supabase.rpc('invalidate_answer', {
-      p_row_id: qaId,
-      p_user_id: userId
+    console.log('[vote.service] voteDown:', qaId);
+
+    const { data, error } = await supabase.functions.invoke('baikal-vote', {
+      body: {
+        action: 'vote_down',
+        user_id: userId,
+        qa_id: qaId,
+      }
     });
 
     if (error) {
-      console.error('voteDown error:', error);
-      
-      if (error.message?.includes('already voted') || error.code === 'P0001') {
-        return {
-          success: false,
-          error: 'ALREADY_VOTED',
-          message: 'Vous avez déjà signalé cette réponse'
-        };
-      }
-      
+      console.error('[vote.service] voteDown error:', error);
       return {
         success: false,
+        action: 'vote_down',
+        qa_id: qaId,
+        trust_score: 0,
+        message: 'Erreur lors du signalement',
         error: error.message,
-        message: 'Erreur lors du signalement'
       };
     }
 
-    return {
-      success: true,
-      message: 'Signalement enregistré',
-      new_score: data?.new_score,
-      new_label: data?.new_label
-    };
+    console.log('[vote.service] voteDown success:', data);
+    return data as VoteResult;
+    
   } catch (err) {
-    console.error('voteDown exception:', err);
+    console.error('[vote.service] voteDown exception:', err);
     return {
       success: false,
-      error: String(err),
-      message: 'Erreur inattendue'
+      action: 'vote_down',
+      qa_id: qaId,
+      trust_score: 0,
+      message: 'Erreur inattendue',
+      error: err instanceof Error ? err.message : String(err),
     };
-  }
-}
-
-// ============================================================
-// CRÉATION D'UNE NOUVELLE QA_MEMORY
-// ============================================================
-
-/**
- * Crée une nouvelle qa_memory à partir d'une réponse validée
- * IMPORTANT: Toujours créée au niveau ORGANISATION (pas App)
- * Car l'utilisateur valide pour son org, pas pour toute l'app
- */
-export async function createQAMemory(params: CreateQAMemoryParams): Promise<{ id: string | null; error: string | null }> {
-  try {
-    const userId = await getCurrentUserId();
-
-    // Générer l'embedding pour la question (optionnel, peut être fait async)
-    let embedding = null;
-    try {
-      const { data: embeddingData, error: embeddingError } = await supabase.functions.invoke('generate-embedding', {
-        body: { text: params.question_text }
-      });
-      if (!embeddingError && embeddingData?.embedding) {
-        embedding = embeddingData.embedding;
-      }
-    } catch (embErr) {
-      console.warn('Embedding generation failed, continuing without:', embErr);
-      // Continuer sans embedding - sera généré plus tard si nécessaire
-    }
-
-    // Insérer la qa_memory au niveau ORGANISATION uniquement
-    const { data, error } = await supabase
-      .schema('rag')
-      .from('qa_memory')
-      .insert({
-        question_text: params.question_text,
-        answer_text: params.answer_text,
-        embedding: embedding,
-        // NIVEAU ORGANISATION - pas de target_apps
-        org_id: params.org_id,
-        target_apps: null,  // Explicitement null - pas au niveau app
-        target_projects: params.target_projects || null,
-        source_document_ids: params.source_document_ids || null,
-        // Scores initiaux
-        trust_score: 1,
-        usage_count: 0,
-        authority_label: 'user',
-        // Audit
-        created_by: userId,
-        validators_ids: [userId]
-      })
-      .select('id')
-      .single();
-
-    if (error) {
-      console.error('createQAMemory error:', error);
-      return { id: null, error: error.message };
-    }
-
-    console.log('✅ qa_memory créée au niveau Organisation:', data.id);
-    return { id: data.id, error: null };
-  } catch (err) {
-    console.error('createQAMemory exception:', err);
-    return { id: null, error: String(err) };
-  }
-}
-
-// ============================================================
-// VOTE SUR UNE NOUVELLE RÉPONSE (sans qa_memory existante)
-// ============================================================
-
-/**
- * Vote positif sur une nouvelle réponse qui n'a pas encore de qa_memory
- * Crée la qa_memory au niveau ORGANISATION puis enregistre le vote
- */
-export async function voteUpNewAnswer(
-  voteContext: VoteContext, 
-  orgId: string, 
-  targetProjects?: string[]
-): Promise<VoteResult & { qa_id?: string }> {
-  try {
-    // Créer la qa_memory au niveau Organisation
-    const { id: qaId, error: createError } = await createQAMemory({
-      question_text: voteContext.question,
-      answer_text: voteContext.answer,
-      source_document_ids: voteContext.source_ids,
-      org_id: orgId,
-      target_projects: targetProjects
-    });
-
-    if (createError || !qaId) {
-      return {
-        success: false,
-        error: createError || 'Erreur création qa_memory',
-        message: 'Impossible de sauvegarder la réponse'
-      };
-    }
-
-    return {
-      success: true,
-      message: 'Réponse validée et sauvegardée',
-      new_score: 1,
-      new_label: 'user',
-      qa_id: qaId
-    };
-  } catch (err) {
-    console.error('voteUpNewAnswer exception:', err);
-    return {
-      success: false,
-      error: String(err),
-      message: 'Erreur inattendue'
-    };
-  }
-}
-
-// ============================================================
-// VÉRIFICATION SI L'UTILISATEUR A DÉJÀ VOTÉ
-// ============================================================
-
-/**
- * Vérifie si l'utilisateur courant a déjà voté pour une qa_memory
- */
-export async function hasUserVoted(qaId: string): Promise<boolean> {
-  try {
-    const userId = await getCurrentUserId();
-
-    const { data, error } = await supabase
-      .schema('rag')
-      .from('qa_memory')
-      .select('validators_ids')
-      .eq('id', qaId)
-      .single();
-
-    if (error || !data) return false;
-
-    const validators = data.validators_ids as string[] || [];
-    return validators.includes(userId);
-  } catch {
-    return false;
   }
 }

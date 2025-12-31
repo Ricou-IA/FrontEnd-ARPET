@@ -1,17 +1,17 @@
 // ============================================================
 // ARPET - RagBadge Component
-// Version: 2.0.0 - Phase 5 : Support generation_mode_ui
-// Date: 2024-12-30
+// Version: 3.0.0 - Phase 6 : Support mode 'memory'
+// Date: 2024-12-31
 // ============================================================
 
-import { Database, Zap, FileText } from 'lucide-react'
+import { Database, Zap, FileText, Brain } from 'lucide-react'
 
-export type GenerationMode = 'chunks' | 'gemini' | 'hybrid' | undefined
+export type GenerationMode = 'chunks' | 'gemini' | 'hybrid' | 'memory' | undefined
 export type CacheStatus = 'hit' | 'miss' | 'none' | undefined
 
 interface RagBadgeProps {
   generationMode?: GenerationMode
-  generationModeUi?: string  // v2.0.0: "Full Document" ou "RAG Chunks"
+  generationModeUi?: string  // "Full Document", "RAG Chunks", "Mémoire Collective"
   cacheStatus?: CacheStatus
   processingTimeMs?: number
   documentsFound?: number
@@ -30,6 +30,7 @@ export function RagBadge({
   if (!generationMode && !generationModeUi) return null
 
   const isGemini = generationMode === 'gemini'
+  const isMemory = generationMode === 'memory' || generationModeUi === 'Mémoire Collective'
   const isFullDocument = generationModeUi === 'Full Document' || isGemini
 
   // Styles selon le mode
@@ -54,6 +55,14 @@ export function RagBadge({
       text: 'text-amber-700 dark:text-amber-400',
       icon: <Zap className="w-3 h-3" />,
       label: 'Hybride'
+    },
+    // v3.0.0: Nouveau mode Mémoire Collective
+    memory: {
+      bg: 'bg-green-50 dark:bg-green-900/30',
+      border: 'border-green-200 dark:border-green-800',
+      text: 'text-green-700 dark:text-green-400',
+      icon: <Brain className="w-3 h-3" />,
+      label: 'Mémoire Collective'
     }
   }
 
@@ -68,6 +77,8 @@ export function RagBadge({
       style = modeStyles.ragChunks
     } else if (generationModeUi === 'Hybride') {
       style = modeStyles.hybrid
+    } else if (generationModeUi === 'Mémoire Collective') {
+      style = modeStyles.memory
     }
   } else if (generationMode) {
     // Fallback sur generationMode
@@ -77,6 +88,8 @@ export function RagBadge({
       style = modeStyles.ragChunks
     } else if (generationMode === 'hybrid') {
       style = modeStyles.hybrid
+    } else if (generationMode === 'memory') {
+      style = modeStyles.memory
     }
   }
 
@@ -117,8 +130,8 @@ export function RagBadge({
       {/* Cache Status (Full Document only) */}
       {renderCacheStatus()}
 
-      {/* Documents count */}
-      {documentsFound !== undefined && documentsFound > 0 && (
+      {/* Documents count - pas affiché pour mode memory */}
+      {!isMemory && documentsFound !== undefined && documentsFound > 0 && (
         <span className="text-[10px] text-stone-400 dark:text-stone-500">
           {documentsFound} doc{documentsFound > 1 ? 's' : ''}
         </span>
