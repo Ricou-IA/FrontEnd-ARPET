@@ -1,27 +1,34 @@
 /**
- * MeetingStep3Review - Phase 2.2
+ * MeetingStep3Review - Phase 7
+ * Version: 3.0.0 - Affichage items groupés (décisions, actions, issues)
  * Étape 3 : Affichage du CR généré et actions
  */
 
 import { useState } from 'react';
 import { 
   CheckCircle, 
-  ListTodo, 
   HelpCircle, 
   FileText, 
-  Pin, 
   Copy,
   Check,
   User,
-  Calendar
+  Calendar,
+  Users,
+  Tag,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
-import type { 
-  ProcessAudioResponse, 
-  MeetingPrepareData,
-  MeetingActionItem,
-  MeetingProcessingStatus
-} from '../../types';
 import { MeetingProgressIndicator } from './MeetingProgressIndicator';
+import {
+  type ProcessAudioResponse,
+  type MeetingPrepareData,
+  type MeetingProcessingStatus,
+  type MeetingItem,
+  groupItemsByType,
+  getItemTypeIcon,
+  getItemTypeLabel,
+  getItemTypeColor,
+} from '../../services/meeting.service';
 
 interface MeetingStep3ReviewProps {
   prepareData: MeetingPrepareData;
@@ -33,7 +40,7 @@ interface MeetingStep3ReviewProps {
 }
 
 export function MeetingStep3Review({
-  prepareData,
+  prepareData: _prepareData,
   processingStatus,
   result,
   error,
@@ -41,19 +48,43 @@ export function MeetingStep3Review({
   onClose,
 }: MeetingStep3ReviewProps) {
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<'summary' | 'transcript'>('summary');
+  const [activeTab, setActiveTab] = useState<'summary' | 'items' | 'transcript'>('summary');
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    decisions: true,
+    actions: true,
+    issues: true,
+    infos: false,
+  });
+
+  // Grouper les items par type
+  const groupedItems = result?.items ? groupItemsByType(result.items) : null;
+
+  // Toggle section
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
 
   // Copier le CR dans le presse-papier
   const handleCopy = async () => {
     if (!result) return;
 
-    const crText = `# ${prepareData.title}
+    const itemsText = result.items
+      .map(item => `- [${getItemTypeLabel(item.item_type)}] ${item.subject}${item.responsible ? ` (${item.responsible})` : ''}${item.lot_reference ? ` - ${item.lot_reference}` : ''}`)
+      .join('\n');
+
+    const participantsText = result.meeting.participants
+      .map(p => p.role ? `${p.name} (${p.role})` : p.name)
+      .join(', ');
+
+    const crText = `# ${result.meeting.meeting_title}
+${result.meeting.meeting_date ? `Date: ${result.meeting.meeting_date}` : ''}
+${participantsText ? `Participants: ${participantsText}` : ''}
 
 ## Résumé
-${result.summary}
+${result.meeting.summary}
 
-## Points d'action
-${result.action_items.map(item => `- [ ] ${item.what} (${item.who}${item.when ? ` - ${item.when}` : ''})`).join('\n')}
+## Points extraits
+${itemsText}
 
 ## Transcript complet
 ${result.transcript}`.trim();
@@ -120,15 +151,50 @@ ${result.transcript}`.trim();
       {/* En-tête succès */}
       <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
         <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-        <div>
+        <div className="flex-1">
           <p className="text-sm font-medium text-green-800">
             Compte-rendu généré avec succès !
           </p>
           <p className="text-xs text-green-600">
-            {prepareData.title}
+            {result.meeting.meeting_title}
           </p>
         </div>
       </div>
+
+      {/* Compteurs */}
+      <div className="flex gap-2 flex-wrap">
+        {result.meeting.decisions_count > 0 && (
+          <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">
+            ✅ {result.meeting.decisions_count} décision{result.meeting.decisions_count > 1 ? 's' : ''}
+          </span>
+        )}
+        {result.meeting.actions_count > 0 && (
+          <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">
+            📋 {result.meeting.actions_count} action{result.meeting.actions_count > 1 ? 's' : ''}
+          </span>
+        )}
+        {result.meeting.issues_count > 0 && (
+          <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-full">
+            ⚠️ {result.meeting.issues_count} problème{result.meeting.issues_count > 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
+
+      {/* Participants */}
+      {result.meeting.participants.length > 0 && (
+        <div className="flex items-center gap-2 text-sm text-stone-600">
+          <Users className="w-4 h-4" />
+          <span>
+            {result.meeting.participants.map((p, i) => (
+              <span key={i}>
+                {i > 0 && ', '}
+                <span className="font-medium">{p.name}</span>
+                {p.role && <span className="text-stone-400"> ({p.role})</span>}
+              </span>
+            ))}
+          </span>
+        </div>
+      )}
 
       {/* Onglets */}
       <div className="flex border-b border-stone-200">
@@ -140,8 +206,21 @@ ${result.transcript}`.trim();
               : 'text-stone-500 hover:text-stone-700'
           }`}
         >
-          Résumé & Actions
+          Résumé
           {activeTab === 'summary' && (
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500" />
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('items')}
+          className={`px-4 py-2 text-sm font-medium transition-colors relative ${
+            activeTab === 'items' 
+              ? 'text-amber-600' 
+              : 'text-stone-500 hover:text-stone-700'
+          }`}
+        >
+          Décisions & Actions
+          {activeTab === 'items' && (
             <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500" />
           )}
         </button>
@@ -153,7 +232,7 @@ ${result.transcript}`.trim();
               : 'text-stone-500 hover:text-stone-700'
           }`}
         >
-          Transcript complet
+          Transcript
           {activeTab === 'transcript' && (
             <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500" />
           )}
@@ -162,55 +241,77 @@ ${result.transcript}`.trim();
 
       {/* Contenu des onglets */}
       <div className="max-h-[300px] overflow-y-auto">
-        {activeTab === 'summary' ? (
+        {/* Onglet Résumé */}
+        {activeTab === 'summary' && (
+          <div className="bg-stone-50 rounded-lg p-4">
+            <h4 className="text-sm font-semibold text-stone-700 mb-2 flex items-center gap-2">
+              <FileText className="w-4 h-4" />
+              Résumé
+            </h4>
+            <p className="text-sm text-stone-600 whitespace-pre-wrap">
+              {result.meeting.summary || 'Aucun résumé disponible'}
+            </p>
+          </div>
+        )}
+
+        {/* Onglet Items (Décisions & Actions) */}
+        {activeTab === 'items' && groupedItems && (
           <div className="space-y-4">
-            {/* Résumé */}
-            <div className="bg-stone-50 rounded-lg p-4">
-              <h4 className="text-sm font-semibold text-stone-700 mb-2 flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                Résumé
-              </h4>
-              <p className="text-sm text-stone-600 whitespace-pre-wrap">
-                {result.summary || 'Aucun résumé disponible'}
-              </p>
-            </div>
+            {/* Décisions */}
+            {groupedItems.decisions.length > 0 && (
+              <ItemSection
+                title="Décisions"
+                items={groupedItems.decisions}
+                type="decision"
+                expanded={expandedSections.decisions}
+                onToggle={() => toggleSection('decisions')}
+              />
+            )}
 
             {/* Actions */}
-            {result.action_items && result.action_items.length > 0 && (
-              <div className="bg-amber-50 rounded-lg p-4">
-                <h4 className="text-sm font-semibold text-amber-800 mb-3 flex items-center gap-2">
-                  <ListTodo className="w-4 h-4" />
-                  Points d'action ({result.action_items.length})
-                </h4>
-                <ul className="space-y-2">
-                  {result.action_items.map((item: MeetingActionItem) => (
-                    <li 
-                      key={item.id} 
-                      className="flex items-start gap-2 text-sm bg-white rounded-lg p-2.5 border border-amber-100"
-                    >
-                      <input type="checkbox" className="mt-0.5 rounded" />
-                      <div className="flex-1">
-                        <p className="text-stone-700">{item.what}</p>
-                        <div className="flex items-center gap-3 mt-1 text-xs text-stone-500">
-                          <span className="flex items-center gap-1">
-                            <User className="w-3 h-3" />
-                            {item.who}
-                          </span>
-                          {item.when && (
-                            <span className="flex items-center gap-1">
-                              <Calendar className="w-3 h-3" />
-                              {item.when}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            {groupedItems.actions.length > 0 && (
+              <ItemSection
+                title="Actions"
+                items={groupedItems.actions}
+                type="action"
+                expanded={expandedSections.actions}
+                onToggle={() => toggleSection('actions')}
+              />
+            )}
+
+            {/* Problèmes */}
+            {groupedItems.issues.length > 0 && (
+              <ItemSection
+                title="Problèmes"
+                items={groupedItems.issues}
+                type="issue"
+                expanded={expandedSections.issues}
+                onToggle={() => toggleSection('issues')}
+              />
+            )}
+
+            {/* Informations */}
+            {groupedItems.infos.length > 0 && (
+              <ItemSection
+                title="Informations"
+                items={groupedItems.infos}
+                type="info"
+                expanded={expandedSections.infos}
+                onToggle={() => toggleSection('infos')}
+              />
+            )}
+
+            {/* Aucun item */}
+            {result.items.length === 0 && (
+              <p className="text-sm text-stone-500 text-center py-4">
+                Aucun élément extrait de cette réunion
+              </p>
             )}
           </div>
-        ) : (
+        )}
+
+        {/* Onglet Transcript */}
+        {activeTab === 'transcript' && (
           <div className="bg-stone-50 rounded-lg p-4">
             <p className="text-sm text-stone-600 whitespace-pre-wrap font-mono leading-relaxed">
               {result.transcript || 'Aucun transcript disponible'}
@@ -225,8 +326,8 @@ ${result.transcript}`.trim();
           onClick={onAddToSandbox}
           className="flex-1 min-w-[140px] px-4 py-2.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors font-medium flex items-center justify-center gap-2"
         >
-          <Pin className="w-4 h-4" />
-          Épingler au Sandbox
+          <CheckCircle className="w-4 h-4" />
+          Terminer
         </button>
 
         <button
@@ -253,6 +354,95 @@ ${result.transcript}`.trim();
           Fermer
         </button>
       </div>
+    </div>
+  );
+}
+
+// ============================================================
+// COMPOSANT : Section d'items
+// ============================================================
+
+interface ItemSectionProps {
+  title: string;
+  items: MeetingItem[];
+  type: MeetingItem['item_type'];
+  expanded: boolean;
+  onToggle: () => void;
+}
+
+function ItemSection({ title, items, type, expanded, onToggle }: ItemSectionProps) {
+  const colors = getItemTypeColor(type);
+  const icon = getItemTypeIcon(type);
+
+  return (
+    <div className={`rounded-lg border ${colors.border} overflow-hidden`}>
+      {/* Header cliquable */}
+      <button
+        onClick={onToggle}
+        className={`w-full px-4 py-3 ${colors.bg} flex items-center justify-between`}
+      >
+        <h4 className={`text-sm font-semibold ${colors.text} flex items-center gap-2`}>
+          <span>{icon}</span>
+          {title} ({items.length})
+        </h4>
+        {expanded ? (
+          <ChevronDown className={`w-4 h-4 ${colors.text}`} />
+        ) : (
+          <ChevronRight className={`w-4 h-4 ${colors.text}`} />
+        )}
+      </button>
+
+      {/* Liste des items */}
+      {expanded && (
+        <ul className="divide-y divide-stone-100">
+          {items.map((item) => (
+            <li key={item.id} className="p-3 bg-white">
+              <div className="flex items-start gap-2">
+                <input 
+                  type="checkbox" 
+                  className="mt-1 rounded border-stone-300" 
+                  defaultChecked={item.status === 'done'}
+                />
+                <div className="flex-1 min-w-0">
+                  {/* Sujet */}
+                  <p className="text-sm font-medium text-stone-800">
+                    {item.subject}
+                  </p>
+                  
+                  {/* Contenu (si différent du sujet) */}
+                  {item.content && item.content !== item.subject && (
+                    <p className="text-sm text-stone-600 mt-0.5">
+                      {item.content}
+                    </p>
+                  )}
+
+                  {/* Métadonnées */}
+                  <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-stone-500">
+                    {item.responsible && (
+                      <span className="flex items-center gap-1">
+                        <User className="w-3 h-3" />
+                        {item.responsible}
+                      </span>
+                    )}
+                    {item.due_date && (
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        {item.due_date}
+                      </span>
+                    )}
+                    {item.lot_reference && (
+                      <span className="flex items-center gap-1 px-1.5 py-0.5 bg-stone-100 rounded">
+                        <Tag className="w-3 h-3" />
+                        {item.lot_reference}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
