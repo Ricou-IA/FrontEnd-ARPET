@@ -1,6 +1,6 @@
 /**
  * Meeting Service - Phase 7
- * Version: 3.1.0 - Envoi JSON (base64) au lieu de FormData
+ * Version: 3.2.0 - Enrichissement avec participants et agenda
  * Gestion des enregistrements de réunions avec extraction décisions/actions
  */
 
@@ -57,7 +57,6 @@ export interface MeetingItem {
 
 /**
  * Données de préparation de la réunion (étape 1)
- * v3.0.0: Ajout project_id et org_id
  */
 export interface MeetingPrepareData {
   title: string;
@@ -69,7 +68,6 @@ export interface MeetingPrepareData {
 
 /**
  * Réponse de l'Edge Function meeting-transcribe
- * v3.1.0: Adaptation à la structure réelle retournée
  */
 export interface ProcessAudioResponse {
   success: boolean;
@@ -173,13 +171,11 @@ export async function processAudio(
       project_id: prepareData.project_id,
       org_id: prepareData.org_id,
       created_by: session.user.id,
-      meeting_date: new Date().toISOString().split('T')[0], // Format YYYY-MM-DD
-      // Metadata optionnelle (non utilisée par l'Edge Function actuelle mais utile pour le futur)
-      metadata: {
-        title: prepareData.title,
-        participants: prepareData.participants,
-        agenda: prepareData.agenda,
-      },
+      meeting_date: new Date().toISOString().split('T')[0],
+      meeting_title: prepareData.title,
+      // Enrichissement pour GPT
+      participants_hint: prepareData.participants || undefined,
+      agenda: prepareData.agenda || undefined,
     };
 
     console.log('[MeetingService] Envoi JSON à meeting-transcribe...', {
@@ -191,6 +187,8 @@ export async function processAudio(
       project_id: prepareData.project_id,
       org_id: prepareData.org_id,
       created_by: session.user.id,
+      participants_hint: prepareData.participants || '(non fourni)',
+      agenda: prepareData.agenda || '(non fourni)',
     });
 
     onStatusChange?.('transcribing');
@@ -223,14 +221,6 @@ export async function processAudio(
     onStatusChange?.('completed');
 
     // Parser la réponse de meeting-transcribe
-    // Structure retournée par l'Edge Function :
-    // {
-    //   success, transcript_path, transcript_length,
-    //   meeting: { id, meeting_title, meeting_date, participants, summary, ... },
-    //   stats: { decisions, actions, issues, infos, total_items },
-    //   timing: { whisper_ms, upload_ms, extraction_ms, total_ms }
-    // }
-    
     const meetingData = data.meeting || {};
     const stats = data.stats || {};
     
@@ -238,7 +228,7 @@ export async function processAudio(
       success: data.success ?? true,
       meeting_id: meetingData.id || '',
       audio_url: meetingData.audio_url || '',
-      transcript: '', // Le transcript est stocké dans le bucket, pas retourné directement
+      transcript: data.transcript || '',  // Transcript retourné par le backend
       
       meeting: {
         meeting_date: meetingData.meeting_date || null,
@@ -250,7 +240,7 @@ export async function processAudio(
         issues_count: stats.issues || 0,
       },
       
-      // Les items sont dans meetingData.items (retournés par extract-meeting-content)
+      // Les items sont dans meetingData.items
       items: parseItems(meetingData.items),
       
       error: data.error,
