@@ -1,6 +1,6 @@
 /**
  * Meeting Service - Phase 7
- * Version: 3.0.0 - Connexion à meeting-transcribe (nouveau backend)
+ * Version: 3.1.0 - Envoi JSON (base64) au lieu de FormData
  * Gestion des enregistrements de réunions avec extraction décisions/actions
  */
 
@@ -69,7 +69,7 @@ export interface MeetingPrepareData {
 
 /**
  * Réponse de l'Edge Function meeting-transcribe
- * v3.0.0: Nouveaux champs items, participants structurés
+ * v3.1.0: Adaptation à la structure réelle retournée
  */
 export interface ProcessAudioResponse {
   success: boolean;
@@ -108,6 +108,34 @@ export const MEETING_PROCESSING_LABELS: Record<MeetingProcessingStatus, string> 
 };
 
 // ============================================================
+// UTILITAIRES
+// ============================================================
+
+/**
+ * Convertit un Blob en base64
+ */
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      // Retirer le préfixe "data:audio/webm;base64," pour n'avoir que le base64 pur
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Utilitaire sleep
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ============================================================
 // TRAITEMENT AUDIO (Edge Function meeting-transcribe)
 // ============================================================
 
@@ -131,50 +159,52 @@ export async function processAudio(
 
     onStatusChange?.('uploading');
 
-    // Créer un FormData (format attendu par l'Edge Function)
-    const formData = new FormData();
+    // Convertir le Blob audio en base64
+    console.log('[MeetingService] Conversion audio en base64...');
+    const audioBase64 = await blobToBase64(audioBlob);
     
-    // Créer un File à partir du Blob avec un nom
+    // Générer un nom de fichier
     const fileName = `meeting_${Date.now()}.webm`;
-    const audioFile = new File([audioBlob], fileName, { 
-      type: audioBlob.type || 'audio/webm' 
-    });
     
-    // Ajouter le fichier audio
-    formData.append('audio', audioFile);
-    formData.append('title', prepareData.title);
-    
-    // Ajouter project_id et org_id (requis pour Phase 7)
-    formData.append('project_id', prepareData.project_id);
-    formData.append('org_id', prepareData.org_id);
-    
-    if (prepareData.participants) {
-      formData.append('participants', prepareData.participants);
-    }
-    if (prepareData.agenda) {
-      formData.append('agenda', prepareData.agenda);
-    }
+    // Préparer le payload JSON (format attendu par l'Edge Function)
+    const payload = {
+      audio_base64: audioBase64,
+      file_name: fileName,
+      project_id: prepareData.project_id,
+      org_id: prepareData.org_id,
+      created_by: session.user.id,
+      meeting_date: new Date().toISOString().split('T')[0], // Format YYYY-MM-DD
+      // Metadata optionnelle (non utilisée par l'Edge Function actuelle mais utile pour le futur)
+      metadata: {
+        title: prepareData.title,
+        participants: prepareData.participants,
+        agenda: prepareData.agenda,
+      },
+    };
 
-    console.log('[MeetingService] Envoi FormData à meeting-transcribe...', {
+    console.log('[MeetingService] Envoi JSON à meeting-transcribe...', {
       title: prepareData.title,
       fileName,
       audioSize: audioBlob.size,
+      base64Length: audioBase64.length,
       mimeType: audioBlob.type,
       project_id: prepareData.project_id,
       org_id: prepareData.org_id,
+      created_by: session.user.id,
     });
 
     onStatusChange?.('transcribing');
 
-    // Appeler l'Edge Function meeting-transcribe
+    // Appeler l'Edge Function meeting-transcribe avec JSON
     const response = await fetch(
       `${SUPABASE_URL}/functions/v1/meeting-transcribe`,
       {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
         },
-        body: formData,
+        body: JSON.stringify(payload),
       }
     );
 
@@ -193,23 +223,35 @@ export async function processAudio(
     onStatusChange?.('completed');
 
     // Parser la réponse de meeting-transcribe
+    // Structure retournée par l'Edge Function :
+    // {
+    //   success, transcript_path, transcript_length,
+    //   meeting: { id, meeting_title, meeting_date, participants, summary, ... },
+    //   stats: { decisions, actions, issues, infos, total_items },
+    //   timing: { whisper_ms, upload_ms, extraction_ms, total_ms }
+    // }
+    
+    const meetingData = data.meeting || {};
+    const stats = data.stats || {};
+    
     const result: ProcessAudioResponse = {
       success: data.success ?? true,
-      meeting_id: data.meeting_id || '',
-      audio_url: data.audio_url || '',
-      transcript: data.transcript || '',
+      meeting_id: meetingData.id || '',
+      audio_url: meetingData.audio_url || '',
+      transcript: '', // Le transcript est stocké dans le bucket, pas retourné directement
       
       meeting: {
-        meeting_date: data.meeting?.meeting_date || null,
-        meeting_title: data.meeting?.meeting_title || prepareData.title,
-        participants: parseParticipants(data.meeting?.participants),
-        summary: data.meeting?.summary || '',
-        decisions_count: data.meeting?.decisions_count || 0,
-        actions_count: data.meeting?.actions_count || 0,
-        issues_count: data.meeting?.issues_count || 0,
+        meeting_date: meetingData.meeting_date || null,
+        meeting_title: meetingData.meeting_title || prepareData.title,
+        participants: parseParticipants(meetingData.participants),
+        summary: meetingData.summary || '',
+        decisions_count: stats.decisions || 0,
+        actions_count: stats.actions || 0,
+        issues_count: stats.issues || 0,
       },
       
-      items: parseItems(data.items),
+      // Les items sont dans meetingData.items (retournés par extract-meeting-content)
+      items: parseItems(meetingData.items),
       
       error: data.error,
     };
@@ -291,13 +333,6 @@ function parseItems(raw: unknown): MeetingItem[] {
   }
   
   return [];
-}
-
-/**
- * Utilitaire sleep
- */
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**
