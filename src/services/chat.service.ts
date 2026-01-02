@@ -1,8 +1,8 @@
 // ============================================================
 // ARPET - Chat Service
-// Version: 2.0.0 - Phase 5 : Librarian v9 avec steps
-// Date: 2024-12-30
-// Support des événements SSE "step" pour transparence UX
+// Version: 2.2.0 - Parsing SSE robuste
+// Date: 2024-12-31
+// Fix: Parsing simplifié pour ne pas perdre de tokens
 // ============================================================
 
 import { supabase } from '../lib/supabase'
@@ -17,15 +17,8 @@ import type {
 // CONFIGURATION
 // ============================================================
 
-/**
- * Endpoint de l'agent RAG
- * v2.0.0: Appel direct à baikal-librarian (Brain optionnel)
- */
 const RAG_ENDPOINT = 'baikal-librarian'
 
-/**
- * URL de base Supabase (pour fetch direct en streaming)
- */
 const SUPABASE_URL = 'https://odspcxgafcqxjzrarsqf.supabase.co'
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9kc3BjeGdhZmNxeGp6cmFyc3FmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1ODcwNzUsImV4cCI6MjA3OTE2MzA3NX0.DKCg_EwasSi_SNto8D3rC5H7FaShuUra8cGQ6g9Q58g'
 
@@ -33,33 +26,18 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // TYPES
 // ============================================================
 
-/**
- * Paramètres d'une requête chat
- */
 export interface ChatRequest {
-  /** Question de l'utilisateur */
   query: string
-  /** ID utilisateur (requis) */
   user_id: string | null
-  /** ID organisation (optionnel) */
   org_id?: string | null
-  /** ID projet/chantier (optionnel) */
   project_id?: string | null
-  /** ID conversation pour la mémoire (optionnel) */
   conversation_id?: string | null
-  /** Mode de génération forcé (optionnel) */
   generation_mode?: 'auto' | 'chunks' | 'gemini'
-  /** Intent forcé (optionnel) */
   intent?: string
-  /** Query réécrite par Brain (optionnel) */
   rewritten_query?: string
-  /** Documents détectés par Brain (optionnel) */
   detected_documents?: string[]
 }
 
-/**
- * Réponse brute de l'API (avant mapping)
- */
 interface RawChatResponse {
   response: string
   conversation_id?: string
@@ -102,50 +80,29 @@ interface RawChatResponse {
   }
 }
 
-/**
- * Réponse de l'API chat (typée)
- */
 export interface ChatResponse {
-  /** Réponse textuelle de l'assistant */
   response: string
-  /** ID de la conversation (pour mémoire) */
   conversation_id?: string
-  /** Sources documentaires utilisées */
   sources?: MessageSource[]
-  /** Nombre de documents trouvés */
   documents_found?: number
-  /** Nombre de qa_memory trouvés */
   qa_memory_found?: number
-  /** Temps de traitement en ms */
   processing_time_ms?: number
-  /** Mode de génération utilisé (interne) */
   generation_mode?: 'chunks' | 'gemini' | 'hybrid'
-  /** Mode de génération (UI) */
   generation_mode_ui?: string
-  /** Statut du cache */
   cache_status?: 'hit' | 'miss' | 'none'
-  /** Type de connaissance */
   knowledge_type?: KnowledgeType
-  /** Nombre de validations */
   validation_count?: number
-  /** Agent source */
   agent_source?: AgentSource
-  /** Prompt utilisé */
   prompt_used?: string
-  /** Résolution du prompt */
   prompt_resolution?: string
-  /** Peut voter sur cette réponse */
   can_vote?: boolean
-  /** Contexte pour le vote */
   vote_context?: VoteContext
-  /** Analyse de Brain */
   analysis?: {
     intent: string
     rewritten_query: string
     detected_documents: string[]
     reasoning: string
   }
-  /** v9: Métadonnées supplémentaires */
   files_count?: number
   chunks_count?: number
   total_pages?: number
@@ -156,17 +113,11 @@ export interface ChatResponse {
   cache_misses?: number
 }
 
-/**
- * Résultat du service
- */
 export interface ChatResult {
   data: ChatResponse | null
   error: Error | null
 }
 
-/**
- * v9: Événement SSE "step"
- */
 export interface SSEStepEvent {
   step: string
   message: string
@@ -182,9 +133,6 @@ export interface SSEStepEvent {
   }
 }
 
-/**
- * Payload SSE pour l'événement "sources" (v9)
- */
 interface SSESourcesPayload {
   sources: Array<{
     id?: string | number
@@ -219,9 +167,6 @@ interface SSESourcesPayload {
 // HELPERS - MAPPING DES TYPES
 // ============================================================
 
-/**
- * Mappe les sources brutes vers MessageSource[]
- */
 function mapSources(rawSources?: RawChatResponse['sources']): MessageSource[] | undefined {
   if (!rawSources || rawSources.length === 0) return undefined
   
@@ -242,9 +187,6 @@ function mapSources(rawSources?: RawChatResponse['sources']): MessageSource[] | 
   }))
 }
 
-/**
- * Mappe les sources SSE vers MessageSource[]
- */
 function mapSSESources(rawSources?: SSESourcesPayload['sources']): MessageSource[] | undefined {
   if (!rawSources || rawSources.length === 0) return undefined
   
@@ -262,9 +204,6 @@ function mapSSESources(rawSources?: SSESourcesPayload['sources']): MessageSource
   }))
 }
 
-/**
- * Mappe le cache_status
- */
 function mapCacheStatus(status?: string | null): 'hit' | 'miss' | 'none' | undefined {
   if (!status) return undefined
   if (status === 'hit') return 'hit'
@@ -272,18 +211,12 @@ function mapCacheStatus(status?: string | null): 'hit' | 'miss' | 'none' | undef
   return 'none'
 }
 
-/**
- * Mappe le generation_mode
- */
 function mapGenerationMode(mode?: string): 'chunks' | 'gemini' | 'hybrid' | undefined {
   if (!mode) return undefined
   if (mode === 'chunks' || mode === 'gemini' || mode === 'hybrid') return mode
   return 'chunks'
 }
 
-/**
- * Mappe le knowledge_type
- */
 function mapKnowledgeType(type?: string): KnowledgeType | undefined {
   if (!type) return undefined
   const validTypes: KnowledgeType[] = [
@@ -295,9 +228,6 @@ function mapKnowledgeType(type?: string): KnowledgeType | undefined {
     : 'shared'
 }
 
-/**
- * Mappe l'agent_source
- */
 function mapAgentSource(source?: string): AgentSource | undefined {
   if (!source) return undefined
   if (source === 'librarian' || source === 'analyst' || source === 'user') {
@@ -306,9 +236,6 @@ function mapAgentSource(source?: string): AgentSource | undefined {
   return 'librarian'
 }
 
-/**
- * Mappe le vote_context
- */
 function mapVoteContext(context?: RawChatResponse['vote_context']): VoteContext | undefined {
   if (!context) return undefined
   return {
@@ -318,9 +245,6 @@ function mapVoteContext(context?: RawChatResponse['vote_context']): VoteContext 
   }
 }
 
-/**
- * Mappe la réponse brute vers ChatResponse
- */
 function mapResponse(raw: RawChatResponse): ChatResponse {
   return {
     response: raw.response,
@@ -343,9 +267,6 @@ function mapResponse(raw: RawChatResponse): ChatResponse {
   }
 }
 
-/**
- * Mappe le payload SSE sources vers ChatResponse partiel
- */
 function mapSSESourcesPayload(payload: SSESourcesPayload): Partial<ChatResponse> {
   return {
     conversation_id: payload.conversation_id,
@@ -370,9 +291,6 @@ function mapSSESourcesPayload(payload: SSESourcesPayload): Partial<ChatResponse>
 // SERVICE - APPEL CLASSIQUE
 // ============================================================
 
-/**
- * Envoie un message à l'agent RAG et retourne la réponse
- */
 export async function sendMessage(request: ChatRequest): Promise<ChatResult> {
   try {
     const {
@@ -432,32 +350,14 @@ export async function sendMessage(request: ChatRequest): Promise<ChatResult> {
 }
 
 // ============================================================
-// SERVICE - STREAMING SSE
+// SERVICE - STREAMING SSE (v2.2.0 - Parsing robuste)
 // ============================================================
 
-/**
- * Callback pour recevoir les tokens en streaming
- */
 export type OnTokenCallback = (token: string) => void
-
-/**
- * Callback pour recevoir les étapes de progression
- */
 export type OnStepCallback = (step: SSEStepEvent) => void
-
-/**
- * Callback pour recevoir les sources à la fin du stream
- */
 export type OnSourcesCallback = (sources: MessageSource[], metadata: Partial<ChatResponse>) => void
-
-/**
- * Callback pour les erreurs
- */
 export type OnErrorCallback = (error: Error) => void
 
-/**
- * Options pour le streaming
- */
 export interface StreamOptions {
   onToken: OnTokenCallback
   onStep?: OnStepCallback
@@ -467,47 +367,81 @@ export interface StreamOptions {
 }
 
 /**
- * Parse une ligne SSE et retourne l'événement et les données
+ * v2.2.0: Traite un événement SSE
  */
-function parseSSELine(line: string): { event: string | null; data: string | null } {
-  if (line.startsWith('event: ')) {
-    return { event: line.slice(7).trim(), data: null }
+function processSSEEvent(
+  eventType: string,
+  eventData: string,
+  options: StreamOptions,
+  timing: { firstTokenTime: number | null; startTime: number }
+): void {
+  try {
+    const parsed = JSON.parse(eventData)
+    
+    switch (eventType) {
+      case 'step': {
+        const stepEvent: SSEStepEvent = {
+          step: parsed.step,
+          message: parsed.message,
+          details: parsed.details,
+        }
+        console.log(`[ChatService] Step: ${stepEvent.step} - ${stepEvent.message}`)
+        options.onStep?.(stepEvent)
+        break
+      }
+      
+      case 'token': {
+        if (parsed.content) {
+          if (timing.firstTokenTime === null) {
+            timing.firstTokenTime = Date.now()
+            const latency = timing.firstTokenTime - timing.startTime
+            console.log(`[ChatService] ⚡ Premier token reçu en ${latency}ms`)
+          }
+          options.onToken(parsed.content)
+        }
+        break
+      }
+      
+      case 'sources': {
+        const sourcesPayload = parsed as SSESourcesPayload
+        const mappedSources = mapSSESources(sourcesPayload.sources) || []
+        const metadata = mapSSESourcesPayload(sourcesPayload)
+        options.onSources?.(mappedSources, metadata)
+        console.log(`[ChatService] Sources: ${mappedSources.length} documents`)
+        console.log(`[ChatService] Mode: ${sourcesPayload.generation_mode_ui || sourcesPayload.generation_mode}`)
+        console.log(`[ChatService] Temps total: ${sourcesPayload.processing_time_ms}ms`)
+        break
+      }
+      
+      case 'done': {
+        console.log('[ChatService] Événement done reçu')
+        break
+      }
+      
+      case 'error': {
+        console.error('[ChatService] Erreur SSE:', parsed.error)
+        options.onError?.(new Error(parsed.error))
+        break
+      }
+    }
+  } catch (parseError) {
+    console.debug('[ChatService] Parsing ignoré:', eventData.substring(0, 50))
   }
-  if (line.startsWith('data: ')) {
-    return { event: null, data: line.slice(6) }
-  }
-  return { event: null, data: null }
 }
 
 /**
  * Envoie un message avec streaming SSE
- * 
- * @param request - Paramètres de la requête
- * @param options - Callbacks pour le streaming
- * @returns AbortController pour annuler le stream
- * 
- * @example
- * ```typescript
- * const controller = await sendMessageStream(
- *   { query: "...", user_id: "..." },
- *   {
- *     onStep: (step) => setCurrentStep(step),
- *     onToken: (token) => setResponse(prev => prev + token),
- *     onSources: (sources, metadata) => {
- *       setSources(sources)
- *       setConversationId(metadata.conversation_id)
- *     },
- *     onError: (error) => setError(error.message),
- *     onComplete: () => setIsLoading(false),
- *   }
- * )
- * ```
+ * v2.2.0: Parsing ligne par ligne simplifié et robuste
  */
 export async function sendMessageStream(
   request: ChatRequest,
   options: StreamOptions
 ): Promise<AbortController> {
   const controller = new AbortController()
+  const timing = {
+    startTime: Date.now(),
+    firstTokenTime: null as number | null
+  }
 
   const {
     query,
@@ -534,7 +468,7 @@ export async function sendMessageStream(
     return controller
   }
 
-  console.log(`[ChatService] Streaming SSE vers ${RAG_ENDPOINT}`)
+  console.log(`[ChatService] 🚀 Streaming SSE vers ${RAG_ENDPOINT}`)
 
   const body: Record<string, unknown> = {
     query: query.trim(),
@@ -555,6 +489,7 @@ export async function sendMessageStream(
   const { data: sessionData } = await supabase.auth.getSession()
   const accessToken = sessionData?.session?.access_token
 
+  // IIFE async pour le streaming
   ;(async () => {
     try {
       const response = await fetch(
@@ -570,6 +505,9 @@ export async function sendMessageStream(
           signal: controller.signal,
         }
       )
+
+      const fetchTime = Date.now() - timing.startTime
+      console.log(`[ChatService] 📡 Connexion établie en ${fetchTime}ms`)
 
       if (!response.ok) {
         const errorText = await response.text()
@@ -595,84 +533,65 @@ export async function sendMessageStream(
 
       const decoder = new TextDecoder()
       let buffer = ''
-      let currentEvent: string | null = null
+      let currentEventType: string | null = null
 
+      // Boucle de lecture
       while (true) {
         const { done, value } = await reader.read()
         
         if (done) {
-          console.log('[ChatService] Stream terminé')
+          console.log('[ChatService] ✅ Stream terminé')
           break
         }
 
-        buffer += decoder.decode(value, { stream: true })
+        // Décoder le chunk reçu
+        const chunk = decoder.decode(value, { stream: true })
+        buffer += chunk
 
+        // Traiter ligne par ligne
         const lines = buffer.split('\n')
+        
+        // Garder la dernière ligne (potentiellement incomplète) dans le buffer
         buffer = lines.pop() || ''
 
         for (const line of lines) {
-          const trimmed = line.trim()
+          const trimmedLine = line.trim()
           
-          if (!trimmed) {
-            currentEvent = null
+          // Ligne vide = fin d'événement, reset
+          if (trimmedLine === '') {
+            currentEventType = null
             continue
           }
-
-          const { event, data } = parseSSELine(trimmed)
-
-          if (event) {
-            currentEvent = event
+          
+          // Ligne "event: xxx"
+          if (trimmedLine.startsWith('event:')) {
+            currentEventType = trimmedLine.substring(6).trim()
             continue
           }
-
-          if (data && currentEvent) {
-            try {
-              const parsed = JSON.parse(data)
-
-              switch (currentEvent) {
-                case 'step':
-                  // v9: Événement de progression
-                  const stepEvent: SSEStepEvent = {
-                    step: parsed.step,
-                    message: parsed.message,
-                    details: parsed.details,
-                  }
-                  console.log(`[ChatService] Step: ${stepEvent.step} - ${stepEvent.message}`)
-                  options.onStep?.(stepEvent)
-                  break
-
-                case 'token':
-                  if (parsed.content) {
-                    options.onToken(parsed.content)
-                  }
-                  break
-
-                case 'sources':
-                  const sourcesPayload = parsed as SSESourcesPayload
-                  const mappedSources = mapSSESources(sourcesPayload.sources) || []
-                  const metadata = mapSSESourcesPayload(sourcesPayload)
-                  options.onSources?.(mappedSources, metadata)
-                  console.log(`[ChatService] Sources reçues: ${mappedSources.length} documents`)
-                  console.log(`[ChatService] Mode: ${sourcesPayload.generation_mode_ui || sourcesPayload.generation_mode}`)
-                  console.log(`[ChatService] Temps total: ${sourcesPayload.processing_time_ms}ms`)
-                  break
-
-                case 'done':
-                  console.log('[ChatService] Événement done reçu')
-                  break
-
-                case 'error':
-                  console.error('[ChatService] Erreur SSE:', parsed.error)
-                  options.onError?.(new Error(parsed.error))
-                  break
-              }
-            } catch (parseError) {
-              console.warn('[ChatService] Erreur parsing SSE:', parseError)
-            }
+          
+          // Ligne "data: xxx"
+          if (trimmedLine.startsWith('data:') && currentEventType) {
+            const eventData = trimmedLine.substring(5).trim()
+            processSSEEvent(currentEventType, eventData, options, timing)
           }
         }
       }
 
+      // Traiter le reste du buffer si non vide
+      if (buffer.trim()) {
+        const remainingLines = buffer.split('\n')
+        for (const line of remainingLines) {
+          const trimmedLine = line.trim()
+          if (trimmedLine.startsWith('data:') && currentEventType) {
+            const eventData = trimmedLine.substring(5).trim()
+            processSSEEvent(currentEventType, eventData, options, timing)
+          }
+        }
+      }
+
+      const totalTime = Date.now() - timing.startTime
+      console.log(`[ChatService] 🏁 Durée totale: ${totalTime}ms`)
+      
       options.onComplete?.()
 
     } catch (error) {

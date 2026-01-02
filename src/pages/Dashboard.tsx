@@ -1,8 +1,8 @@
 // ============================================================
 // ARPET - Dashboard Page
-// Version: 6.0.1 - Phase 5 : Support generation_mode_ui
-// Date: 2024-12-30
-// Support des événements "step" pour transparence UX
+// Version: 6.1.0 - Phase 6 : Support vote avec activeProject
+// Date: 2024-12-31
+// Passage de userQuestion, projectId, activeProject au MessageBubble
 // ============================================================
 
 import { useState, useEffect, useRef } from 'react'
@@ -289,7 +289,7 @@ export function Dashboard() {
               prompt_resolution: receivedMetadata.prompt_resolution,
               
               generation_mode: receivedMetadata.generation_mode,
-              generation_mode_ui: receivedMetadata.generation_mode_ui,  // ← AJOUTÉ
+              generation_mode_ui: receivedMetadata.generation_mode_ui,
               cache_status: receivedMetadata.cache_status,
               
               can_vote: true,
@@ -349,13 +349,25 @@ export function Dashboard() {
       {/* Zone Messages - Scrollable */}
       <div className="flex-1 overflow-y-auto px-8 pb-6">
         <div className="max-w-3xl mx-auto space-y-8 pt-4">
-          {messages.map((message) => (
-            <MessageBubble
-              key={message.id}
-              message={message}
-              onVoteComplete={handleVoteComplete}
-            />
-          ))}
+          {/* v6.1.0: Passage des props pour le vote */}
+          {messages.map((message, index) => {
+            // Trouver la question utilisateur précédente (pour vote_up_new)
+            const previousUserMessage = messages
+              .slice(0, index)
+              .reverse()
+              .find(m => m.role === 'user')
+            
+            return (
+              <MessageBubble
+                key={message.id}
+                message={message}
+                userQuestion={previousUserMessage?.content}
+                projectId={activeProject?.id}
+                activeProject={activeProject}
+                onVoteComplete={handleVoteComplete}
+              />
+            )
+          })}
 
           {/* Affichage du streaming avec étapes */}
           {isAgentTyping && (

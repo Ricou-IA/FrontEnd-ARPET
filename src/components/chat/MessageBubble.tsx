@@ -1,12 +1,13 @@
 // ============================================================
 // ARPET - MessageBubble Component
-// Version: 8.0.1 - Phase 6 : Mémoire Collective (fix props)
+// Version: 8.0.2 - Phase 6 : Support super admin sans org_id
 // Date: 2024-12-31
 // ============================================================
 //
-// Changements v8.0.1:
-// - project_id passé en props (au lieu du store)
-// - Compatible avec types v6.0
+// Changements v8.0.2:
+// - Ajout activeProject en props
+// - effectiveOrgId = profile.org_id OU activeProject.org_id
+// - Support super admins sans organisation propre
 //
 // ============================================================
 
@@ -29,11 +30,13 @@ interface MessageBubbleProps {
   userQuestion?: string
   /** Project ID courant (pour vote_up_new) */
   projectId?: string | null
+  /** Projet actif avec org_id (fallback pour super admin) */
+  activeProject?: { id: string; org_id: string } | null
   /** Callback après vote réussi */
   onVoteComplete?: (message: Message, voteType: 'up' | 'down', qaId?: string) => void
 }
 
-export function MessageBubble({ message, userQuestion, projectId, onVoteComplete }: MessageBubbleProps) {
+export function MessageBubble({ message, userQuestion, projectId, activeProject, onVoteComplete }: MessageBubbleProps) {
   const { profile } = useAuth()
   const { openViewer } = useAppStore()
   
@@ -84,8 +87,11 @@ export function MessageBubble({ message, userQuestion, projectId, onVoteComplete
   const handleVoteUp = useCallback(async () => {
     if (isVoting || voteStatus !== 'none') return
     
-    if (!profile?.org_id) {
-      setVoteError('Connexion requise pour voter')
+    // v8.0.2: Utiliser org_id du profil OU du projet actif (pour super admin)
+    const effectiveOrgId = profile?.org_id || activeProject?.org_id
+    
+    if (!effectiveOrgId) {
+      setVoteError('Organisation requise pour voter (sélectionnez un projet)')
       return
     }
 
@@ -121,18 +127,21 @@ export function MessageBubble({ message, userQuestion, projectId, onVoteComplete
           ?.filter(s => s.source_file_id)
           .map(s => s.source_file_id as string) || []
 
+        // Utiliser projectId passé en props OU activeProject.id
+        const effectiveProjectId = projectId || activeProject?.id || null
+
         console.log('[MessageBubble] voteUpNew:', {
           question: userQuestion.substring(0, 50) + '...',
-          org_id: profile.org_id,
-          project_id: projectId,
+          org_id: effectiveOrgId,
+          project_id: effectiveProjectId,
           source_file_ids: sourceFileIds
         })
 
         const result = await voteService.voteUpNew({
           question: userQuestion,
           answer: message.content,
-          org_id: profile.org_id,
-          project_id: projectId || null,
+          org_id: effectiveOrgId,
+          project_id: effectiveProjectId,
           source_file_ids: sourceFileIds,
         })
 
@@ -150,7 +159,7 @@ export function MessageBubble({ message, userQuestion, projectId, onVoteComplete
     } finally {
       setIsVoting(false)
     }
-  }, [isVoting, voteStatus, message, profile, projectId, userQuestion, onVoteComplete])
+  }, [isVoting, voteStatus, message, profile, activeProject, projectId, userQuestion, onVoteComplete])
 
   /**
    * Vote négatif (👎)
