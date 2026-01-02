@@ -1,8 +1,8 @@
 // ============================================================
 // ARPET - Dashboard Page
-// Version: 6.1.0 - Phase 6 : Support vote avec activeProject
-// Date: 2024-12-31
-// Passage de userQuestion, projectId, activeProject au MessageBubble
+// Version: 6.2.0 - Fix org_id pour super admin (mémoire collective)
+// Date: 2025-01-02
+// Fix: Utilise activeProject.org_id en priorité pour la recherche mémoire
 // ============================================================
 
 import { useState, useEffect, useRef } from 'react'
@@ -201,7 +201,12 @@ export function Dashboard() {
 
     const userId = profile?.id || null
     
+    // v6.2.0: Utiliser activeProject.org_id en priorité (super admin)
+    const effectiveOrgId = activeProject?.org_id || profile?.org_id || null
+    
     console.log('[Dashboard] User ID:', userId)
+    console.log('[Dashboard] Org ID:', effectiveOrgId)
+    console.log('[Dashboard] Project ID:', activeProject?.id)
     console.log('[Dashboard] Conversation ID:', currentConversationId || 'nouvelle conversation')
     console.log('[Dashboard] Démarrage streaming SSE...')
 
@@ -214,7 +219,7 @@ export function Dashboard() {
         {
           query: content,
           user_id: userId,
-          org_id: profile?.org_id || null,
+          org_id: effectiveOrgId,
           project_id: activeProject?.id || null,
           conversation_id: currentConversationId,
         },
