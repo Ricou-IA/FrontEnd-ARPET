@@ -1,19 +1,17 @@
 // ============================================================
 // ARPET - Sidebar Component
-// Version: 5.0.0 - "Sexy" Revamp
+// Version: 5.1.0 - With Connectors Modal
 // Date: 2026-01-03
 // ============================================================
 
 import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import {
-  ChevronLeft, ChevronRight, LogOut,
-  FolderOpen, MessageSquare, Video, Trash2, Plus
-} from 'lucide-react'
+import { ChevronLeft, ChevronRight, LogOut, FolderOpen, MessageSquare, Video, Trash2, Plus, HardDrive } from 'lucide-react'
 import { useAppStore } from '../../stores/appStore'
 import { useAuth } from '../../hooks/useAuth'
 import { ProjectSelector } from '../ui/ProjectSelector'
 import { MeetingRecordModal } from '../meeting'
+import { ConnectorsModal } from '../ui/ConnectorsModal'
 import type { Project, SavedConversation } from '../../types'
 
 interface SidebarProps {
@@ -35,8 +33,9 @@ export function Sidebar({ projects }: SidebarProps) {
   } = useAppStore()
   const { profile, signOut } = useAuth()
 
-  // État pour la modale de réunion
+  // États pour les modales
   const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false)
+  const [isConnectorsModalOpen, setIsConnectorsModalOpen] = useState(false)
 
   // État pour la conversation à supprimer (confirmation)
   const [conversationToDelete, setConversationToDelete] = useState<SavedConversation | null>(null)
@@ -165,6 +164,15 @@ export function Sidebar({ projects }: SidebarProps) {
               isActive={isActive(routes.documents)}
               expanded={sidebarOpen}
               onClick={() => handleNavigate(routes.documents)}
+            />
+
+            {/* Connecteurs */}
+            <NavItem
+              icon={<HardDrive className="w-[18px] h-[18px]" />}
+              label="Connecteurs"
+              isActive={false}
+              expanded={sidebarOpen}
+              onClick={() => setIsConnectorsModalOpen(true)}
             />
 
             {/* Réunion */}
@@ -341,6 +349,11 @@ export function Sidebar({ projects }: SidebarProps) {
       <MeetingRecordModal
         isOpen={isMeetingModalOpen}
         onClose={() => setIsMeetingModalOpen(false)}
+      />
+
+      <ConnectorsModal
+        isOpen={isConnectorsModalOpen}
+        onClose={() => setIsConnectorsModalOpen(false)}
       />
     </>
   )
