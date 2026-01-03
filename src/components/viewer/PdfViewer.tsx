@@ -35,10 +35,10 @@ export function PdfViewer({
   const [numPages, setNumPages] = useState(0)
   const [containerWidth, setContainerWidth] = useState<number | null>(null)
   const [visiblePage, setVisiblePage] = useState(1)
-  
+
   const containerRef = useRef<HTMLDivElement>(null)
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map())
-  
+
   // Flag pour distinguer scroll programmatique (boutons) vs scroll naturel (molette)
   const isScrollingProgrammatically = useRef(false)
   const lastCurrentPage = useRef(currentPage)
@@ -111,20 +111,20 @@ export function PdfViewer({
   useEffect(() => {
     // Ne rien faire si c'est le même numéro de page
     if (currentPage === lastCurrentPage.current) return
-    
+
     // Mettre à jour la référence
     lastCurrentPage.current = currentPage
 
     // Scroll programmatique vers la page demandée
     if (pageRefs.current.has(currentPage)) {
       isScrollingProgrammatically.current = true
-      
+
       const pageElement = pageRefs.current.get(currentPage)
       pageElement?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      
+
       // Mettre à jour visiblePage immédiatement
       setVisiblePage(currentPage)
-      
+
       // Reset le flag après l'animation de scroll
       setTimeout(() => {
         isScrollingProgrammatically.current = false
@@ -199,31 +199,51 @@ export function PdfViewer({
         loading={null}
         className="flex flex-col items-center py-4 gap-4"
       >
-        {/* Rendu de TOUTES les pages */}
+        {/* Virtualization simple: Rendu conditionnel des pages proches */}
         {Array.from({ length: numPages }, (_, index) => {
           const pageNumber = index + 1
+          // Marge de sécurité (buffer) pour le rendu
+          const buffer = 3
+          const isVisible = Math.abs(pageNumber - visiblePage) <= buffer
+
+          // Estimation de la hauteur pour le placeholder (A4 ratio approx 1.414)
+          const placeholderHeight = effectiveWidth ? effectiveWidth * 1.414 : 800
+
           return (
             <div
               key={pageNumber}
               ref={(el) => setPageRef(pageNumber, el)}
               data-page={pageNumber}
               className="flex-shrink-0"
+              style={{
+                minHeight: isVisible ? undefined : placeholderHeight,
+                width: effectiveWidth
+              }}
             >
-              <Page
-                pageNumber={pageNumber}
-                width={effectiveWidth}
-                loading={
-                  <div 
-                    className="flex items-center justify-center bg-white" 
-                    style={{ width: effectiveWidth, height: effectiveWidth ? effectiveWidth * 1.4 : 400 }}
-                  >
-                    <Loader2 className="w-6 h-6 text-stone-300 animate-spin" />
-                  </div>
-                }
-                className="shadow-lg"
-                renderTextLayer={true}
-                renderAnnotationLayer={true}
-              />
+              {isVisible ? (
+                <Page
+                  pageNumber={pageNumber}
+                  width={effectiveWidth}
+                  loading={
+                    <div
+                      className="flex items-center justify-center bg-white"
+                      style={{ width: effectiveWidth, height: placeholderHeight }}
+                    >
+                      <Loader2 className="w-6 h-6 text-stone-300 animate-spin" />
+                    </div>
+                  }
+                  className="shadow-lg"
+                  renderTextLayer={true}
+                  renderAnnotationLayer={true}
+                />
+              ) : (
+                <div
+                  className="bg-white/50 border border-stone-200 dark:border-stone-700 flex items-center justify-center"
+                  style={{ width: effectiveWidth, height: placeholderHeight }}
+                >
+                  <span className="text-xs text-stone-400">Page {pageNumber}</span>
+                </div>
+              )}
             </div>
           )
         })}

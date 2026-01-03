@@ -5,6 +5,7 @@
 // ============================================================
 
 import { useState, useRef, useCallback, useEffect } from 'react'
+export { formatDuration } from '../utils/formatters'
 
 export interface UseAudioRecorderReturn {
   /** État d'enregistrement en cours */
@@ -76,14 +77,14 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       }
 
       // Demander l'accès au microphone
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           sampleRate: 44100,
-        } 
+        }
       })
-      
+
       streamRef.current = stream
       setHasPermission(true)
 
@@ -135,7 +136,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     } catch (err) {
       console.error('Error starting recording:', err)
       setHasPermission(false)
-      
+
       if (err instanceof Error) {
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
           setError('Accès au microphone refusé. Veuillez autoriser l\'accès dans les paramètres de votre navigateur.')
@@ -186,11 +187,4 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 // HELPERS
 // ============================================================
 
-/**
- * Formate une durée en secondes en format MM:SS
- */
-export function formatDuration(seconds: number): string {
-  const mins = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-}
+

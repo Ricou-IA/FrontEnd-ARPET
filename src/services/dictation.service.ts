@@ -40,11 +40,11 @@ export async function transcribeAudio(
 
     // Préparer le FormData
     const formData = new FormData()
-    
+
     // Déterminer l'extension selon le type MIME
     const extension = audioBlob.type.includes('webm') ? 'webm' : 'mp4'
     const filename = `dictation_${Date.now()}.${extension}`
-    
+
     // Créer un File à partir du Blob
     const audioFile = new File([audioBlob], filename, { type: audioBlob.type })
     formData.append('audio', audioFile)
@@ -56,7 +56,7 @@ export async function transcribeAudio(
     }
 
     // URL Supabase - utilise la variable d'environnement ou fallback
-    const supabaseUrl = 'https://odspcxgafcqxjzrarsqf.supabase.co'
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 
     console.log('📡 Appel Edge Function:', `${supabaseUrl}/functions/v1/transcribe-dictation`)
 

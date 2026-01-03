@@ -57,7 +57,7 @@ export interface Project {
 export type MessageRole = 'user' | 'assistant';
 
 // Types de connaissance étendus (v6 - avec mémoire)
-export type KnowledgeType = 
+export type KnowledgeType =
   | 'none'              // Aucun document trouvé
   | 'shared'            // Documents partagés (général)
   | 'organization'      // Documents de l'organisation
@@ -86,18 +86,18 @@ export interface MessageSource {
   id?: string | number;
   type?: SourceType;
   source_file_id?: string | null;  // v6.0.1: Accepte undefined et null
-  
+
   // Affichage
   document_name?: string;
   name?: string;
   content_preview?: string | null;
   score?: number;
   layer?: string;
-  
+
   // Rétro-compat
   document_id?: string;
   chunk_id?: string;
-  
+
   // QA Memory spécifique
   authority_label?: AuthorityLabel;
   qa_id?: string;
@@ -122,7 +122,7 @@ export interface Message {
   validation_count?: number;
   sources?: MessageSource[];
   agent_source?: AgentSource;
-  
+
   // Infos retrieval
   documents_found?: number;
   qa_memory_found?: number;
@@ -138,32 +138,32 @@ export interface Message {
   // =============================================
   // v6: MÉMOIRE COLLECTIVE
   // =============================================
-  
+
   /** true si la réponse vient de qa_memory (pas de RAG) */
   from_memory?: boolean;
-  
+
   /** ID de la qa_memory utilisée (si from_memory=true) ou créée (après vote) */
   qa_memory_id?: string | null;
-  
+
   /** Similarité du match mémoire (0-1) */
   qa_memory_similarity?: number;
-  
+
   /** true si FAQ Expert */
   qa_memory_is_expert?: boolean;
-  
+
   /** Score de confiance (nombre de votes positifs) */
   qa_memory_trust_score?: number;
 
   // =============================================
   // SYSTÈME DE VOTE
   // =============================================
-  
+
   /** true si l'utilisateur peut voter sur cette réponse */
   can_vote?: boolean;
-  
+
   /** Contexte pour créer une qa_memory lors du vote (si from_memory=false) */
   vote_context?: VoteContext;
-  
+
   /** Vote de l'utilisateur courant sur ce message */
   user_vote?: 'up' | 'down' | null;
 
@@ -282,24 +282,24 @@ export interface SourceFile {
   file_size: number | null;
   chunk_count: number;
   content_hash: string | null;
-  
+
   // Classification
   layer: DocumentLayer;
   org_id: string | null;
   project_id: string | null;
   created_by: string | null;
   app_id: string | null;
-  
+
   // Stockage
   storage_bucket: string;
   storage_path: string | null;
-  
+
   // Processing
   ingestion_level: string;
   processing_status: ProcessingStatus;
   processing_error: string | null;
   processed_at: string | null;
-  
+
   // Promotion (colonnes ajoutées)
   promotion_status: PromotionStatus;
   promotion_requested_at: string | null;
@@ -307,7 +307,7 @@ export interface SourceFile {
   promotion_reviewed_at: string | null;
   promotion_reviewed_by: string | null;
   promotion_comment: string | null;
-  
+
   // Métadonnées libres (catégorie = slug, etc.)
   metadata: {
     category?: string; // slug de la catégorie
@@ -315,7 +315,7 @@ export interface SourceFile {
     tags?: string[];
     [key: string]: unknown;
   };
-  
+
   // Timestamps
   created_at: string;
   updated_at: string;
@@ -445,9 +445,9 @@ export function formatFileSize(bytes: number | null): string {
 /**
  * Helper: Obtenir le badge de statut promotion
  */
-export function getPromotionBadge(status: PromotionStatus): { 
-  label: string; 
-  color: string; 
+export function getPromotionBadge(status: PromotionStatus): {
+  label: string;
+  color: string;
   bgColor: string;
 } | null {
   switch (status) {
@@ -507,17 +507,17 @@ export interface ViewerState {
  */
 export function isViewableFile(mimeType: string | null, filename: string): boolean {
   if (!mimeType && !filename) return false;
-  
+
   // PDF
   if (mimeType?.includes('pdf') || filename.toLowerCase().endsWith('.pdf')) {
     return true;
   }
-  
+
   // Images
   const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
   const isImageMime = mimeType?.startsWith('image/');
   const isImageExt = imageExtensions.some(ext => filename.toLowerCase().endsWith(ext));
-  
+
   return isImageMime || isImageExt;
 }
 
@@ -528,15 +528,15 @@ export function getViewerType(mimeType: string | null, filename: string): 'pdf' 
   if (mimeType?.includes('pdf') || filename.toLowerCase().endsWith('.pdf')) {
     return 'pdf';
   }
-  
+
   const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
   const isImageMime = mimeType?.startsWith('image/');
   const isImageExt = imageExtensions.some(ext => filename.toLowerCase().endsWith(ext));
-  
+
   if (isImageMime || isImageExt) {
     return 'image';
   }
-  
+
   return 'unsupported';
 }
 
@@ -556,6 +556,7 @@ export interface SavedConversation {
   title: string;
   messages: Message[];
   source_qa_id: string | null;
+  rag_conversation_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -582,7 +583,7 @@ export type MeetingStep = 'prepare' | 'record' | 'processing' | 'review';
 /**
  * Statut du traitement de l'audio
  */
-export type MeetingProcessingStatus = 
+export type MeetingProcessingStatus =
   | 'idle'
   | 'uploading'
   | 'transcribing'
@@ -655,8 +656,8 @@ export const MEETING_PROCESSING_LABELS: Record<MeetingProcessingStatus, string> 
  * Vérifie si une source est une qa_memory validée
  */
 export function isValidatedSource(source: MessageSource): boolean {
-  return source.type === 'qa_memory' && 
-         (source.authority_label === 'team' || source.authority_label === 'expert');
+  return source.type === 'qa_memory' &&
+    (source.authority_label === 'team' || source.authority_label === 'expert');
 }
 
 /**
@@ -733,14 +734,14 @@ export function formatMeetingDuration(seconds: number): string {
  */
 export function generateMeetingDefaultTitle(): string {
   const now = new Date();
-  const date = now.toLocaleDateString('fr-FR', { 
-    day: '2-digit', 
-    month: '2-digit', 
-    year: 'numeric' 
+  const date = now.toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
   });
-  const time = now.toLocaleTimeString('fr-FR', { 
-    hour: '2-digit', 
-    minute: '2-digit' 
+  const time = now.toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit'
   });
   return `Réunion du ${date} à ${time}`;
 }

@@ -6,11 +6,11 @@
 // ============================================================
 
 import { supabase } from '../lib/supabase'
-import type { 
-  MessageSource, 
-  KnowledgeType, 
-  AgentSource, 
-  VoteContext 
+import type {
+  MessageSource,
+  KnowledgeType,
+  AgentSource,
+  VoteContext
 } from '../types'
 
 // ============================================================
@@ -19,8 +19,8 @@ import type {
 
 const RAG_ENDPOINT = 'baikal-librarian'
 
-const SUPABASE_URL = 'https://odspcxgafcqxjzrarsqf.supabase.co'
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9kc3BjeGdhZmNxeGp6cmFyc3FmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1ODcwNzUsImV4cCI6MjA3OTE2MzA3NX0.DKCg_EwasSi_SNto8D3rC5H7FaShuUra8cGQ6g9Q58g'
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 // ============================================================
 // TYPES
@@ -169,11 +169,11 @@ interface SSESourcesPayload {
 
 function mapSources(rawSources?: RawChatResponse['sources']): MessageSource[] | undefined {
   if (!rawSources || rawSources.length === 0) return undefined
-  
+
   return rawSources.map(source => ({
     id: source.id,
-    type: source.type === 'document' || source.type === 'qa_memory' 
-      ? source.type 
+    type: source.type === 'document' || source.type === 'qa_memory'
+      ? source.type
       : 'document',
     source_file_id: source.source_file_id,
     document_name: source.document_name,
@@ -189,11 +189,11 @@ function mapSources(rawSources?: RawChatResponse['sources']): MessageSource[] | 
 
 function mapSSESources(rawSources?: SSESourcesPayload['sources']): MessageSource[] | undefined {
   if (!rawSources || rawSources.length === 0) return undefined
-  
+
   return rawSources.map(source => ({
     id: source.id?.toString(),
-    type: source.type === 'document' || source.type === 'qa_memory' 
-      ? source.type 
+    type: source.type === 'document' || source.type === 'qa_memory'
+      ? source.type
       : 'document',
     source_file_id: source.source_file_id || undefined,
     document_name: source.document_name,
@@ -220,11 +220,11 @@ function mapGenerationMode(mode?: string): 'chunks' | 'gemini' | 'hybrid' | unde
 function mapKnowledgeType(type?: string): KnowledgeType | undefined {
   if (!type) return undefined
   const validTypes: KnowledgeType[] = [
-    'none', 'shared', 'organization', 'project', 'personal', 
+    'none', 'shared', 'organization', 'project', 'personal',
     'global', 'new', 'team_validated', 'expert_validated'
   ]
-  return validTypes.includes(type as KnowledgeType) 
-    ? (type as KnowledgeType) 
+  return validTypes.includes(type as KnowledgeType)
+    ? (type as KnowledgeType)
     : 'shared'
 }
 
@@ -377,7 +377,7 @@ function processSSEEvent(
 ): void {
   try {
     const parsed = JSON.parse(eventData)
-    
+
     switch (eventType) {
       case 'step': {
         const stepEvent: SSEStepEvent = {
@@ -389,7 +389,7 @@ function processSSEEvent(
         options.onStep?.(stepEvent)
         break
       }
-      
+
       case 'token': {
         if (parsed.content) {
           if (timing.firstTokenTime === null) {
@@ -401,7 +401,7 @@ function processSSEEvent(
         }
         break
       }
-      
+
       case 'sources': {
         const sourcesPayload = parsed as SSESourcesPayload
         const mappedSources = mapSSESources(sourcesPayload.sources) || []
@@ -412,12 +412,12 @@ function processSSEEvent(
         console.log(`[ChatService] Temps total: ${sourcesPayload.processing_time_ms}ms`)
         break
       }
-      
+
       case 'done': {
         console.log('[ChatService] Événement done reçu')
         break
       }
-      
+
       case 'error': {
         console.error('[ChatService] Erreur SSE:', parsed.error)
         options.onError?.(new Error(parsed.error))
@@ -489,121 +489,121 @@ export async function sendMessageStream(
   const { data: sessionData } = await supabase.auth.getSession()
   const accessToken = sessionData?.session?.access_token
 
-  // IIFE async pour le streaming
-  ;(async () => {
-    try {
-      const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/${RAG_ENDPOINT}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken || SUPABASE_ANON_KEY}`,
-            'apikey': SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify(body),
-          signal: controller.signal,
+    // IIFE async pour le streaming
+    ; (async () => {
+      try {
+        const response = await fetch(
+          `${SUPABASE_URL}/functions/v1/${RAG_ENDPOINT}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${accessToken || SUPABASE_ANON_KEY}`,
+              'apikey': SUPABASE_ANON_KEY,
+            },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+          }
+        )
+
+        const fetchTime = Date.now() - timing.startTime
+        console.log(`[ChatService] 📡 Connexion établie en ${fetchTime}ms`)
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(`Erreur ${response.status}: ${errorText}`)
         }
-      )
 
-      const fetchTime = Date.now() - timing.startTime
-      console.log(`[ChatService] 📡 Connexion établie en ${fetchTime}ms`)
+        const contentType = response.headers.get('content-type')
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Erreur ${response.status}: ${errorText}`)
-      }
+        if (!contentType?.includes('text/event-stream')) {
+          console.log('[ChatService] Réponse non-SSE, fallback JSON')
+          const data = await response.json()
+          const mappedData = mapResponse(data as RawChatResponse)
+          options.onToken(mappedData.response)
+          options.onSources?.(mappedData.sources || [], mappedData)
+          options.onComplete?.()
+          return
+        }
 
-      const contentType = response.headers.get('content-type')
-      
-      if (!contentType?.includes('text/event-stream')) {
-        console.log('[ChatService] Réponse non-SSE, fallback JSON')
-        const data = await response.json()
-        const mappedData = mapResponse(data as RawChatResponse)
-        options.onToken(mappedData.response)
-        options.onSources?.(mappedData.sources || [], mappedData)
+        const reader = response.body?.getReader()
+        if (!reader) {
+          throw new Error('Impossible de lire le stream')
+        }
+
+        const decoder = new TextDecoder()
+        let buffer = ''
+        let currentEventType: string | null = null
+
+        // Boucle de lecture
+        while (true) {
+          const { done, value } = await reader.read()
+
+          if (done) {
+            console.log('[ChatService] ✅ Stream terminé')
+            break
+          }
+
+          // Décoder le chunk reçu
+          const chunk = decoder.decode(value, { stream: true })
+          buffer += chunk
+
+          // Traiter ligne par ligne
+          const lines = buffer.split('\n')
+
+          // Garder la dernière ligne (potentiellement incomplète) dans le buffer
+          buffer = lines.pop() || ''
+
+          for (const line of lines) {
+            const trimmedLine = line.trim()
+
+            // Ligne vide = fin d'événement, reset
+            if (trimmedLine === '') {
+              currentEventType = null
+              continue
+            }
+
+            // Ligne "event: xxx"
+            if (trimmedLine.startsWith('event:')) {
+              currentEventType = trimmedLine.substring(6).trim()
+              continue
+            }
+
+            // Ligne "data: xxx"
+            if (trimmedLine.startsWith('data:') && currentEventType) {
+              const eventData = trimmedLine.substring(5).trim()
+              processSSEEvent(currentEventType, eventData, options, timing)
+            }
+          }
+        }
+
+        // Traiter le reste du buffer si non vide
+        if (buffer.trim()) {
+          const remainingLines = buffer.split('\n')
+          for (const line of remainingLines) {
+            const trimmedLine = line.trim()
+            if (trimmedLine.startsWith('data:') && currentEventType) {
+              const eventData = trimmedLine.substring(5).trim()
+              processSSEEvent(currentEventType, eventData, options, timing)
+            }
+          }
+        }
+
+        const totalTime = Date.now() - timing.startTime
+        console.log(`[ChatService] 🏁 Durée totale: ${totalTime}ms`)
+
         options.onComplete?.()
-        return
-      }
 
-      const reader = response.body?.getReader()
-      if (!reader) {
-        throw new Error('Impossible de lire le stream')
-      }
-
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let currentEventType: string | null = null
-
-      // Boucle de lecture
-      while (true) {
-        const { done, value } = await reader.read()
-        
-        if (done) {
-          console.log('[ChatService] ✅ Stream terminé')
-          break
+      } catch (error) {
+        if ((error as Error).name === 'AbortError') {
+          console.log('[ChatService] Stream annulé')
+        } else {
+          console.error('[ChatService] Erreur streaming:', error)
+          options.onError?.(error as Error)
         }
-
-        // Décoder le chunk reçu
-        const chunk = decoder.decode(value, { stream: true })
-        buffer += chunk
-
-        // Traiter ligne par ligne
-        const lines = buffer.split('\n')
-        
-        // Garder la dernière ligne (potentiellement incomplète) dans le buffer
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          const trimmedLine = line.trim()
-          
-          // Ligne vide = fin d'événement, reset
-          if (trimmedLine === '') {
-            currentEventType = null
-            continue
-          }
-          
-          // Ligne "event: xxx"
-          if (trimmedLine.startsWith('event:')) {
-            currentEventType = trimmedLine.substring(6).trim()
-            continue
-          }
-          
-          // Ligne "data: xxx"
-          if (trimmedLine.startsWith('data:') && currentEventType) {
-            const eventData = trimmedLine.substring(5).trim()
-            processSSEEvent(currentEventType, eventData, options, timing)
-          }
-        }
+        options.onComplete?.()
       }
-
-      // Traiter le reste du buffer si non vide
-      if (buffer.trim()) {
-        const remainingLines = buffer.split('\n')
-        for (const line of remainingLines) {
-          const trimmedLine = line.trim()
-          if (trimmedLine.startsWith('data:') && currentEventType) {
-            const eventData = trimmedLine.substring(5).trim()
-            processSSEEvent(currentEventType, eventData, options, timing)
-          }
-        }
-      }
-
-      const totalTime = Date.now() - timing.startTime
-      console.log(`[ChatService] 🏁 Durée totale: ${totalTime}ms`)
-      
-      options.onComplete?.()
-
-    } catch (error) {
-      if ((error as Error).name === 'AbortError') {
-        console.log('[ChatService] Stream annulé')
-      } else {
-        console.error('[ChatService] Erreur streaming:', error)
-        options.onError?.(error as Error)
-      }
-      options.onComplete?.()
-    }
-  })()
+    })()
 
   return controller
 }

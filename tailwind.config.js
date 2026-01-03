@@ -15,18 +15,19 @@ export default {
       },
       colors: {
         'arpet': {
-          'bg': '#FAFAF9',
-          'sidebar': '#F5F5F4',
-          'profile': '#9B2C2C',
+          'bg': '#fafaf9',      // Stone-50 (Was pure white/gray mix)
+          'sidebar': '#f5f5f4', // Stone-100
+          'accent': '#9B2C2C',  // Original Red/Brown
+          'accent-light': '#B91C1C',
         },
         'dark': {
-          'bg': '#0f172a',
-          'surface': '#1e293b',
-          'elevated': '#334155',
-          'border': '#475569',
-          'text': '#e2e8f0',
-          'muted': '#94a3b8',
-          'input': '#1e293b',
+          'bg': '#0c0a09',      // Stone-950 (Warmer dark)
+          'surface': '#1c1917', // Stone-900
+          'elevated': '#292524', // Stone-800
+          'border': '#44403c',  // Stone-700
+          'text': '#f5f5f4',    // Stone-100
+          'muted': '#a8a29e',   // Stone-400
+          'input': '#1c1917',
         }
       },
       animation: {

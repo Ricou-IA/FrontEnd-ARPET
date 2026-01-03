@@ -5,12 +5,13 @@
  */
 
 import { supabase } from '../lib/supabase';
+export { formatDuration } from '../utils/formatters';
 
 // ============================================================
 // CONSTANTES
 // ============================================================
 
-const SUPABASE_URL = 'https://odspcxgafcqxjzrarsqf.supabase.co';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
 // ============================================================
 // TYPES
@@ -24,7 +25,7 @@ interface ServiceResult<T> {
 /**
  * Statut du traitement audio
  */
-export type MeetingProcessingStatus = 
+export type MeetingProcessingStatus =
   | 'idle'
   | 'uploading'
   | 'transcribing'
@@ -74,7 +75,7 @@ export interface ProcessAudioResponse {
   meeting_id: string;
   audio_url: string;
   transcript: string;
-  
+
   // Données structurées extraites
   meeting: {
     meeting_date: string | null;
@@ -85,10 +86,10 @@ export interface ProcessAudioResponse {
     actions_count: number;
     issues_count: number;
   };
-  
+
   // Items extraits (décisions, actions, issues)
   items: MeetingItem[];
-  
+
   // Erreur éventuelle
   error?: string;
 }
@@ -160,10 +161,10 @@ export async function processAudio(
     // Convertir le Blob audio en base64
     console.log('[MeetingService] Conversion audio en base64...');
     const audioBase64 = await blobToBase64(audioBlob);
-    
+
     // Générer un nom de fichier
     const fileName = `meeting_${Date.now()}.webm`;
-    
+
     // Préparer le payload JSON (format attendu par l'Edge Function)
     const payload = {
       audio_base64: audioBase64,
@@ -223,13 +224,13 @@ export async function processAudio(
     // Parser la réponse de meeting-transcribe
     const meetingData = data.meeting || {};
     const stats = data.stats || {};
-    
+
     const result: ProcessAudioResponse = {
       success: data.success ?? true,
       meeting_id: meetingData.id || '',
       audio_url: meetingData.audio_url || '',
       transcript: data.transcript || '',  // Transcript retourné par le backend
-      
+
       meeting: {
         meeting_date: meetingData.meeting_date || null,
         meeting_title: meetingData.meeting_title || prepareData.title,
@@ -239,10 +240,10 @@ export async function processAudio(
         actions_count: stats.actions || 0,
         issues_count: stats.issues || 0,
       },
-      
+
       // Les items sont dans meetingData.items
       items: parseItems(meetingData.items),
-      
+
       error: data.error,
     };
 
@@ -263,7 +264,7 @@ export async function processAudio(
  */
 function parseParticipants(raw: unknown): MeetingParticipant[] {
   if (!raw) return [];
-  
+
   if (Array.isArray(raw)) {
     return raw.map((item) => {
       if (typeof item === 'object' && item !== null) {
@@ -283,7 +284,7 @@ function parseParticipants(raw: unknown): MeetingParticipant[] {
       return { name: String(item) };
     });
   }
-  
+
   return [];
 }
 
@@ -292,7 +293,7 @@ function parseParticipants(raw: unknown): MeetingParticipant[] {
  */
 function parseItems(raw: unknown): MeetingItem[] {
   if (!raw) return [];
-  
+
   if (Array.isArray(raw)) {
     return raw.map((item, index) => {
       if (typeof item === 'object' && item !== null) {
@@ -321,37 +322,28 @@ function parseItems(raw: unknown): MeetingItem[] {
       };
     });
   }
-  
+
   return [];
 }
 
 /**
  * Formate la durée en mm:ss ou hh:mm:ss
  */
-export function formatDuration(seconds: number): string {
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-
-  if (hrs > 0) {
-    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-}
+// ... (fonction supprimée, importée depuis utils/formatters)
 
 /**
  * Génère un titre par défaut pour la réunion
  */
 export function generateDefaultTitle(): string {
   const now = new Date();
-  const date = now.toLocaleDateString('fr-FR', { 
-    day: '2-digit', 
-    month: '2-digit', 
-    year: 'numeric' 
+  const date = now.toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
   });
-  const time = now.toLocaleTimeString('fr-FR', { 
-    hour: '2-digit', 
-    minute: '2-digit' 
+  const time = now.toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit'
   });
   return `Réunion du ${date} à ${time}`;
 }

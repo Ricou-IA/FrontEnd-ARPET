@@ -1,20 +1,13 @@
 // ============================================================
 // ARPET - MessageBubble Component
-// Version: 8.0.2 - Phase 6 : Support super admin sans org_id
-// Date: 2024-12-31
-// ============================================================
-//
-// Changements v8.0.2:
-// - Ajout activeProject en props
-// - effectiveOrgId = profile.org_id OU activeProject.org_id
-// - Support super admins sans organisation propre
-//
+// Version: 9.0.0 - "Sexy" Revamp
+// Date: 2026-01-03
 // ============================================================
 
 import { useState, useCallback } from 'react'
-import { 
-  Copy, ThumbsUp, ThumbsDown, Check, 
-  AlertCircle, CheckCircle, Loader2, Eye, Brain 
+import {
+  Copy, ThumbsUp, ThumbsDown, Check,
+  AlertCircle, CheckCircle, Loader2, Eye, Brain
 } from 'lucide-react'
 import type { Message, MessageSource, ViewerDocument } from '../../types'
 import { getAuthorityBadge } from '../../types'
@@ -39,7 +32,7 @@ interface MessageBubbleProps {
 export function MessageBubble({ message, userQuestion, projectId, activeProject, onVoteComplete }: MessageBubbleProps) {
   const { profile } = useAuth()
   const { openViewer } = useAppStore()
-  
+
   // États locaux
   const [isVoting, setIsVoting] = useState(false)
   const [voteStatus, setVoteStatus] = useState<'none' | 'up' | 'down'>(message.user_vote || 'none')
@@ -52,10 +45,10 @@ export function MessageBubble({ message, userQuestion, projectId, activeProject,
   // ================================================================
   if (message.role === 'user') {
     return (
-      <div className="flex gap-4 justify-end">
-        <div className="max-w-2xl">
-          <div className="text-sm font-sans text-stone-700 dark:text-stone-200 leading-relaxed bg-stone-100 dark:bg-stone-800 p-4 rounded-l-xl rounded-br-xl">
-            <p className="whitespace-pre-wrap">{message.content}</p>
+      <div className="flex gap-4 justify-end animate-[slideDownFade_0.3s_ease-out]">
+        <div className="max-w-4xl w-full flex justify-end">
+          <div className="text-[15px] font-sans text-stone-900 bg-gradient-to-br from-white to-stone-50 border border-stone-200/50 shadow-sm p-5 rounded-2xl rounded-tr-sm">
+            <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
           </div>
         </div>
       </div>
@@ -65,7 +58,7 @@ export function MessageBubble({ message, userQuestion, projectId, activeProject,
   // ================================================================
   // HANDLERS
   // ================================================================
-  
+
   const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(message.content)
@@ -78,18 +71,13 @@ export function MessageBubble({ message, userQuestion, projectId, activeProject,
 
   /**
    * Vote positif (👍)
-   * 
-   * 3 cas possibles:
-   * 1. Réponse depuis mémoire (from_memory=true) → voteUpExisting
-   * 2. Réponse RAG avec qa_memory_id (déjà votée) → voteUpExisting
-   * 3. Nouvelle réponse RAG → voteUpNew (crée qa_memory)
    */
   const handleVoteUp = useCallback(async () => {
     if (isVoting || voteStatus !== 'none') return
-    
+
     // v8.0.2: Utiliser org_id du profil OU du projet actif (pour super admin)
     const effectiveOrgId = profile?.org_id || activeProject?.org_id
-    
+
     if (!effectiveOrgId) {
       setVoteError('Organisation requise pour voter (sélectionnez un projet)')
       return
@@ -102,19 +90,19 @@ export function MessageBubble({ message, userQuestion, projectId, activeProject,
       // Cas 1 & 2: qa_memory existe déjà
       if (message.qa_memory_id) {
         console.log('[MessageBubble] voteUpExisting:', message.qa_memory_id)
-        
+
         const result = await voteService.voteUpExisting(message.qa_memory_id)
-        
+
         if (result.success) {
           setVoteStatus('up')
           setLocalTrustScore(result.trust_score)
           onVoteComplete?.(message, 'up', result.qa_id || undefined)
         } else {
-          setVoteError(result.error === 'ALREADY_VOTED' 
-            ? 'Vous avez déjà voté pour cette réponse' 
+          setVoteError(result.error === 'ALREADY_VOTED'
+            ? 'Vous avez déjà voté pour cette réponse'
             : result.message)
         }
-      } 
+      }
       // Cas 3: Nouvelle réponse RAG → créer qa_memory
       else {
         if (!userQuestion) {
@@ -163,12 +151,10 @@ export function MessageBubble({ message, userQuestion, projectId, activeProject,
 
   /**
    * Vote négatif (👎)
-   * 
-   * Seulement possible si qa_memory_id existe (réponse en mémoire)
    */
   const handleVoteDown = useCallback(async () => {
     if (isVoting || voteStatus !== 'none') return
-    
+
     // Seules les réponses avec qa_memory_id peuvent être signalées
     if (!message.qa_memory_id) {
       setVoteError('Seules les réponses validées peuvent être signalées')
@@ -180,9 +166,9 @@ export function MessageBubble({ message, userQuestion, projectId, activeProject,
 
     try {
       console.log('[MessageBubble] voteDown:', message.qa_memory_id)
-      
+
       const result = await voteService.voteDown(message.qa_memory_id)
-      
+
       if (result.success) {
         setVoteStatus('down')
         setLocalTrustScore(result.trust_score)
@@ -206,29 +192,28 @@ export function MessageBubble({ message, userQuestion, projectId, activeProject,
    * Header selon le type de réponse
    */
   const renderKnowledgeHeader = () => {
-    // v8.0.0: Réponse depuis mémoire collective
     if (message.from_memory) {
       if (message.qa_memory_is_expert) {
         return (
-          <div className="flex items-center gap-2 mb-3 pb-2 border-b border-amber-100 dark:border-amber-900/30">
-            <span className="bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+          <div className="flex items-center gap-2 mb-4 pb-0">
+            <span className="bg-amber-500/10 text-amber-600 dark:text-amber-500 border border-amber-500/20 text-[11px] px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1.5 shadow-sm">
               ⭐ FAQ Expert
             </span>
-            <span className="text-[10px] text-stone-400 dark:text-stone-500">
+            <span className="text-[11px] text-stone-400 font-medium">
               Réponse instantanée
             </span>
           </div>
         )
       }
-      
+
       return (
-        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-green-100 dark:border-green-900/30">
-          <span className="bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-            <Brain className="w-2.5 h-2.5" />
+        <div className="flex items-center gap-2 mb-4 pb-0">
+          <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 border border-emerald-500/20 text-[11px] px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1.5 shadow-sm">
+            <Brain className="w-3 h-3" />
             Mémoire Collective
           </span>
           {localTrustScore > 0 && (
-            <span className="text-[10px] text-stone-400 dark:text-stone-500 font-medium">
+            <span className="text-[11px] text-stone-400 font-medium">
               {localTrustScore} validation{localTrustScore > 1 ? 's' : ''}
             </span>
           )}
@@ -236,16 +221,15 @@ export function MessageBubble({ message, userQuestion, projectId, activeProject,
       )
     }
 
-    // Réponses validées par l'équipe (depuis RAG mais avec qa_memory)
     if (message.knowledge_type === 'team_validated' || localTrustScore >= 3) {
       return (
-        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-green-100 dark:border-green-900/30">
-          <span className="bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-            <Check className="w-2.5 h-2.5" />
+        <div className="flex items-center gap-2 mb-4 pb-0">
+          <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 border border-emerald-500/20 text-[11px] px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1.5 shadow-sm">
+            <Check className="w-3 h-3" />
             Validée par l'équipe
           </span>
           {localTrustScore > 0 && (
-            <span className="text-[10px] text-stone-400 dark:text-stone-500 font-medium">
+            <span className="text-[11px] text-stone-400 font-medium">
               {localTrustScore} validation{localTrustScore > 1 ? 's' : ''}
             </span>
           )}
@@ -255,12 +239,12 @@ export function MessageBubble({ message, userQuestion, projectId, activeProject,
 
     // Nouvelle réponse RAG
     return (
-      <div className="flex items-center gap-2 mb-3 pb-2 border-b border-blue-100 dark:border-blue-900/30">
-        <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
+      <div className="flex items-center gap-2 mb-4 pb-0">
+        <span className="bg-blue-500/10 text-blue-600 dark:text-blue-500 border border-blue-500/20 text-[11px] px-2.5 py-0.5 rounded-full font-bold shadow-sm">
           ✨ Nouvelle réponse
         </span>
-        <span className="text-[10px] text-stone-400 dark:text-stone-500">
-          Votez 👍 si cette réponse vous aide
+        <span className="text-[11px] text-stone-400 font-medium">
+          Votez 👍 si utile
         </span>
       </div>
     )
@@ -273,13 +257,13 @@ export function MessageBubble({ message, userQuestion, projectId, activeProject,
     if (!message.sources || message.sources.length === 0) return null
 
     return (
-      <div className="mt-3 pt-2 border-t border-stone-100 dark:border-stone-800">
-        <p className="text-[10px] text-stone-400 dark:text-stone-500 font-medium mb-1.5">Sources :</p>
-        <div className="flex flex-wrap gap-1.5">
+      <div className="mt-5 pt-4 border-t border-stone-200/50 dark:border-white/5">
+        <p className="text-[11px] text-stone-400 dark:text-stone-500 font-bold uppercase tracking-wider mb-2">Sources</p>
+        <div className="flex flex-wrap gap-2">
           {message.sources.map((source, index) => (
-            <SourceBadge 
-              key={source.id || source.source_file_id || index} 
-              source={source} 
+            <SourceBadge
+              key={source.id || source.source_file_id || index}
+              source={source}
               onOpenViewer={openViewer}
             />
           ))}
@@ -291,19 +275,22 @@ export function MessageBubble({ message, userQuestion, projectId, activeProject,
   // ================================================================
   // RENDER MESSAGE ASSISTANT
   // ================================================================
-  
-  // Déterminer si le bouton 👎 est actif
+
   const canVoteDown = Boolean(message.qa_memory_id)
-  
+
   return (
-    <div className="flex gap-4 group">
-      <div className="w-8 h-8 rounded-full bg-stone-800 dark:bg-stone-200 flex items-center justify-center text-white dark:text-stone-800 font-serif italic text-sm flex-shrink-0 mt-1">
+    <div className="flex gap-5 group animate-[slideDownFade_0.4s_ease-out]">
+      <div className="w-9 h-9 rounded-xl bg-stone-900 dark:bg-white flex items-center justify-center text-white dark:text-stone-900 font-serif italic text-sm flex-shrink-0 mt-1 shadow-md shadow-stone-900/10">
         A
       </div>
 
-      <div className="flex-1 max-w-2xl">
-        <div className="text-sm text-stone-700 dark:text-stone-200 leading-relaxed bg-white dark:bg-stone-900 border border-stone-100 dark:border-stone-800 p-4 rounded-r-xl rounded-bl-xl shadow-sm">
-          
+      <div className="flex-1 max-w-4xl">
+        {/* Bulle principale - Glassmorphism */}
+        <div className="relative text-[15px] text-stone-700 dark:text-stone-200 leading-relaxed 
+          bg-white/80 dark:bg-stone-900/80 backdrop-blur-md
+          border border-stone-200/60 dark:border-white/10 
+          p-6 rounded-2xl rounded-tl-sm shadow-sm hover:shadow-md transition-shadow duration-300">
+
           {renderKnowledgeHeader()}
 
           {/* Badge RAG (mode de génération) */}
@@ -314,13 +301,13 @@ export function MessageBubble({ message, userQuestion, projectId, activeProject,
               cacheStatus={message.cache_status}
               processingTimeMs={message.processing_time_ms}
               documentsFound={message.documents_found}
-              className="mb-3"
+              className="mb-4"
             />
           )}
 
           {/* Contenu du message */}
-          <div 
-            className="prose prose-sm prose-stone dark:prose-invert max-w-none font-serif"
+          <div
+            className="prose prose-sm prose-stone dark:prose-invert max-w-none font-sans"
             dangerouslySetInnerHTML={{ __html: formatContent(message.content) }}
           />
 
@@ -328,12 +315,12 @@ export function MessageBubble({ message, userQuestion, projectId, activeProject,
 
           {/* Erreur de vote */}
           {voteError && (
-            <div className="mt-3 flex items-center gap-1.5 text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-2 py-1.5 rounded">
-              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
-              <span>{voteError}</span>
-              <button 
+            <div className="mt-4 flex items-center gap-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg p-3">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span className="font-medium">{voteError}</span>
+              <button
                 onClick={() => setVoteError(null)}
-                className="ml-auto text-red-400 hover:text-red-600 dark:hover:text-red-300"
+                className="ml-auto hover:bg-red-100 p-1 rounded transition-colors"
               >
                 ×
               </button>
@@ -342,45 +329,33 @@ export function MessageBubble({ message, userQuestion, projectId, activeProject,
         </div>
 
         {/* Barre d'actions */}
-        <div className="flex items-center justify-between mt-2">
+        <div className="flex items-center justify-between mt-2 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
           {/* Bouton Copier */}
           <div className="flex gap-2">
-            <button 
+            <button
               onClick={handleCopy}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                copied 
-                  ? 'bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400' 
-                  : 'bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300'
-              }`}
-              title={copied ? 'Copié !' : 'Copier'}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${copied
+                  ? 'bg-emerald-50 text-emerald-600'
+                  : 'text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800'
+                }`}
             >
-              {copied ? (
-                <CheckCircle className="w-3.5 h-3.5" />
-              ) : (
-                <Copy className="w-3.5 h-3.5" />
-              )}
+              {copied ? <CheckCircle className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
               {copied ? 'Copié' : 'Copier'}
             </button>
           </div>
 
-          {/* Boutons de vote */}
-          <div className="flex items-center gap-1">
+          {/* Boutons de vote - Style pillule */}
+          <div className="flex items-center gap-1 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-full p-1 shadow-sm">
             {/* Vote Up */}
-            <button 
+            <button
               onClick={handleVoteUp}
               disabled={isVoting || voteStatus !== 'none'}
-              className={`p-1.5 rounded-full transition-all ${
-                voteStatus === 'up'
-                  ? 'bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400'
+              className={`p-2 rounded-full transition-all ${voteStatus === 'up'
+                  ? 'bg-green-100 text-green-600'
                   : voteStatus !== 'none'
-                  ? 'text-stone-200 dark:text-stone-700 cursor-not-allowed'
-                  : 'hover:bg-green-50 dark:hover:bg-green-900/30 hover:text-green-600 dark:hover:text-green-400 text-stone-400 dark:text-stone-500'
-              }`}
-              title={
-                voteStatus === 'up' 
-                  ? 'Vous avez validé cette réponse' 
-                  : 'Cette réponse est utile'
-              }
+                    ? 'text-stone-300 cursor-not-allowed'
+                    : 'hover:bg-stone-100 text-stone-400 hover:text-green-600'
+                }`}
             >
               {isVoting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -388,34 +363,21 @@ export function MessageBubble({ message, userQuestion, projectId, activeProject,
                 <ThumbsUp className={`w-4 h-4 ${voteStatus === 'up' ? 'fill-current' : ''}`} />
               )}
             </button>
-            
-            {/* Compteur */}
-            <span className={`text-xs font-bold min-w-[20px] text-center ${
-              localTrustScore > 0 ? 'text-green-600 dark:text-green-400' : 'text-stone-400 dark:text-stone-500'
-            }`}>
-              {localTrustScore > 0 ? localTrustScore : ''}
-            </span>
-            
+
+            <div className="w-px h-4 bg-stone-200 dark:bg-stone-700" />
+
             {/* Vote Down */}
-            <button 
+            <button
               onClick={handleVoteDown}
               disabled={isVoting || voteStatus !== 'none' || !canVoteDown}
-              className={`p-1.5 rounded-full transition-all ${
-                voteStatus === 'down'
-                  ? 'bg-red-100 dark:bg-red-900/40 text-red-500 dark:text-red-400'
+              className={`p-2 rounded-full transition-all ${voteStatus === 'down'
+                  ? 'bg-red-100 text-red-500'
                   : !canVoteDown
-                  ? 'text-stone-200 dark:text-stone-700 cursor-not-allowed opacity-50'
-                  : voteStatus !== 'none'
-                  ? 'text-stone-200 dark:text-stone-700 cursor-not-allowed'
-                  : 'hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 text-stone-400 dark:text-stone-500'
-              }`}
-              title={
-                !canVoteDown
-                  ? 'Seules les réponses validées peuvent être signalées'
-                  : voteStatus === 'down' 
-                  ? 'Vous avez signalé cette réponse' 
-                  : 'Signaler une réponse incorrecte'
-              }
+                    ? 'text-stone-200 cursor-not-allowed'
+                    : voteStatus !== 'none'
+                      ? 'text-stone-300 cursor-not-allowed'
+                      : 'hover:bg-stone-100 text-stone-400 hover:text-red-500'
+                }`}
             >
               <ThumbsDown className={`w-4 h-4 ${voteStatus === 'down' ? 'fill-current' : ''}`} />
             </button>
@@ -437,24 +399,24 @@ interface SourceBadgeProps {
 
 function SourceBadge({ source, onOpenViewer }: SourceBadgeProps) {
   const [isLoading, setIsLoading] = useState(false)
-  
+
   const isQAMemory = source.type === 'qa_memory'
   const authorityBadge = isQAMemory ? getAuthorityBadge(source.authority_label) : null
-  
+
   const sourceFileId = source.source_file_id
   const isDocument = !isQAMemory && sourceFileId
 
   const handleViewDocument = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    
+
     if (isLoading || !sourceFileId) return
 
     console.log('🔍 Opening document with source_file_id:', sourceFileId)
     setIsLoading(true)
-    
+
     try {
       const { data: file, error: fileError } = await getSourceFileById(sourceFileId)
-      
+
       if (fileError || !file) {
         console.error('Could not find file:', sourceFileId, fileError)
         return
@@ -496,44 +458,42 @@ function SourceBadge({ source, onOpenViewer }: SourceBadgeProps) {
   // Badge pour qa_memory
   if (isQAMemory) {
     return (
-      <span 
-        className={`text-[10px] px-2 py-0.5 rounded flex items-center gap-1 cursor-help ${
-          authorityBadge?.color || 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400'
-        }`}
+      <span
+        className={`text-[11px] px-2.5 py-1 rounded-md flex items-center gap-1.5 cursor-help border transition-colors ${authorityBadge?.color
+            ? 'bg-opacity-10 border-opacity-20'
+            : 'bg-stone-50 border-stone-200 text-stone-600 hover:bg-stone-100'
+          }`}
         title={source.content_preview || 'Réponse validée'}
       >
         {source.authority_label === 'expert' && '⭐'}
         {source.authority_label === 'team' && '✓'}
-        <span className="truncate max-w-[120px]">
+        <span className="truncate max-w-[140px] font-medium">
           {source.document_name || source.name || 'Mémoire collective'}
         </span>
-        {source.score !== undefined && (
-          <span className="opacity-60">({Math.round(source.score * 100)}%)</span>
-        )}
       </span>
     )
   }
 
   // Badge pour document
   const displayName = source.document_name || source.name || 'Document'
-  
+
   return (
-    <span 
-      className="text-[10px] bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 px-2 py-0.5 rounded flex items-center gap-1.5 group/source"
+    <span
+      className="text-[11px] bg-stone-50 border border-stone-200 text-stone-500 px-2.5 py-1 rounded-md flex items-center gap-2 group/source transition-colors hover:bg-stone-100 hover:border-stone-300"
       title={source.content_preview || 'Document source'}
     >
-      <span className="truncate max-w-[150px]">
+      <span className="truncate max-w-[180px] font-medium">
         {displayName}
       </span>
       {source.score !== undefined && (
-        <span className="opacity-60">({Math.round(source.score * 100)}%)</span>
+        <span className="opacity-50 text-[10px]">({Math.round(source.score * 100)}%)</span>
       )}
-      
+
       {isDocument && (
         <button
           onClick={handleViewDocument}
           disabled={isLoading}
-          className="p-0.5 rounded hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-50"
+          className="ml-1 p-0.5 rounded-full hover:bg-blue-100 text-stone-400 hover:text-blue-600 transition-all disabled:opacity-50"
           title="Voir le document"
         >
           {isLoading ? (
@@ -547,20 +507,16 @@ function SourceBadge({ source, onOpenViewer }: SourceBadgeProps) {
   )
 }
 
-// ============================================================
-// HELPER: FORMAT CONTENT
-// ============================================================
-
 function formatContent(content: string): string {
   let formatted = content
 
-  formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-  formatted = formatted.replace(/__(.+?)__/g, '<strong>$1</strong>')
-  formatted = formatted.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>')
-  formatted = formatted.replace(/`([^`]+)`/g, '<code class="bg-stone-100 dark:bg-stone-800 px-1 py-0.5 rounded text-xs">$1</code>')
-  formatted = formatted.replace(/^- (.+)$/gm, '• $1')
-  formatted = formatted.replace(/^(\d+)\. (.+)$/gm, '<span class="font-medium">$1.</span> $2')
-  formatted = formatted.replace(/\n\n/g, '</p><p class="mt-3">')
+  formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-stone-900">$1</strong>')
+  formatted = formatted.replace(/__(.+?)__/g, '<strong class="font-semibold text-stone-900">$1</strong>')
+  formatted = formatted.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em class="italic text-stone-800">$1</em>')
+  formatted = formatted.replace(/`([^`]+)`/g, '<code class="bg-stone-100 border border-stone-200 px-1.5 py-0.5 rounded text-[13px] font-mono text-stone-800">$1</code>')
+  formatted = formatted.replace(/^- (.+)$/gm, '<span class="inline-block ml-2 text-stone-400 mr-2">•</span>$1')
+  formatted = formatted.replace(/^(\d+)\. (.+)$/gm, '<span class="font-bold text-stone-800 mr-1">$1.</span> $2')
+  formatted = formatted.replace(/\n\n/g, '</p><p class="mt-4">')
   formatted = formatted.replace(/\n/g, '<br>')
 
   if (!formatted.startsWith('<')) {
