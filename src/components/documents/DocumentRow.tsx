@@ -1,7 +1,13 @@
 // ============================================================
 // ARPET - DocumentRow Component
-// Version: 2.2.1 - Fix Lucide title prop
-// Date: 2025-12-18
+// Version: 2.3.0 - Utilisation permissions DB (can_edit, can_delete)
+// Date: 2025-01-04
+// 
+// MODIFICATIONS v2.3.0:
+// - Utilise document.can_edit au lieu de documentsActiveLayer === 'user'
+// - Utilise document.can_delete pour le bouton supprimer
+// - Charge les catégories au montage (pas seulement en mode édition)
+// - Charge les projets seulement en mode édition
 // ============================================================
 
 import { useState, useEffect } from 'react'
@@ -67,12 +73,23 @@ export function DocumentRow({ document }: DocumentRowProps) {
   
   const promotionBadge = getPromotionBadge(document.promotion_status)
 
+  // v2.3.0: Permissions depuis la DB
+  const canEdit = document.can_edit ?? false
+  const canDelete = document.can_delete ?? false
+
+  // v2.3.0: Charger les catégories au montage (pour affichage dans la liste)
   useEffect(() => {
-    if (isEditing) {
-      if (userProjects.length === 0) fetchUserProjects()
-      if (availableCategories.length === 0) fetchDocumentCategories()
+    if (availableCategories.length === 0) {
+      fetchDocumentCategories()
     }
-  }, [isEditing, userProjects.length, availableCategories.length, fetchUserProjects, fetchDocumentCategories])
+  }, [availableCategories.length, fetchDocumentCategories])
+
+  // v2.3.0: Charger les projets seulement en mode édition
+  useEffect(() => {
+    if (isEditing && userProjects.length === 0) {
+      fetchUserProjects()
+    }
+  }, [isEditing, userProjects.length, fetchUserProjects])
 
   const resetForm = () => {
     setEditFilename(document.original_filename)
@@ -351,20 +368,37 @@ export function DocumentRow({ document }: DocumentRowProps) {
             </button>
           )}
           
-          {documentsActiveLayer === 'user' && (
-            <button onClick={() => setIsEditing(true)} className="p-1.5 text-gray-500 hover:text-[#0B0F17] hover:bg-gray-100 rounded" title="Modifier">
+          {/* v2.3.0: Bouton édition basé sur can_edit de la DB */}
+          {canEdit && (
+            <button 
+              onClick={() => setIsEditing(true)} 
+              className="p-1.5 text-gray-500 hover:text-[#0B0F17] hover:bg-gray-100 rounded" 
+              title="Modifier"
+            >
               <Pencil className="w-4 h-4" />
             </button>
           )}
           
+          {/* Bouton promotion (seulement layer user et statut draft) */}
           {layerConfig.canPromote && document.promotion_status === 'draft' && (
-            <button onClick={handlePromote} disabled={isPromoting} className="p-1.5 text-gray-500 hover:text-[#0B0F17] hover:bg-gray-100 rounded" title="Proposer">
+            <button 
+              onClick={handlePromote} 
+              disabled={isPromoting} 
+              className="p-1.5 text-gray-500 hover:text-[#0B0F17] hover:bg-gray-100 rounded" 
+              title="Proposer"
+            >
               {isPromoting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
             </button>
           )}
           
-          {layerConfig.canDelete && (
-            <button onClick={handleDelete} disabled={isDeleting} className="p-1.5 text-gray-500 hover:text-[#0B0F17] hover:bg-gray-100 rounded" title="Supprimer">
+          {/* v2.3.0: Bouton suppression basé sur can_delete de la DB */}
+          {canDelete && (
+            <button 
+              onClick={handleDelete} 
+              disabled={isDeleting} 
+              className="p-1.5 text-gray-500 hover:text-[#0B0F17] hover:bg-gray-100 rounded" 
+              title="Supprimer"
+            >
               {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
             </button>
           )}

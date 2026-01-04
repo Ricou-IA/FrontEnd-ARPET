@@ -1,8 +1,8 @@
 // ============================================================
 // ARPET - Dashboard Page
-// Version: 6.2.0 - Fix org_id pour super admin (mémoire collective)
-// Date: 2025-01-02
-// Fix: Utilise activeProject.org_id en priorité pour la recherche mémoire
+// Version: 6.2.1 - Header compact (réduction espace vertical)
+// Date: 2025-01-04
+// Fix: Réduction py-12 → py-4, suppression mb-2
 // ============================================================
 
 import { useState, useEffect, useRef } from 'react'
@@ -262,9 +262,9 @@ export function Dashboard() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="sticky top-0 z-30 px-8 py-12 flex-shrink-0 bg-transparent border-b-0">
-        <h1 className="font-serif text-4xl font-normal text-[#0B0F17] dark:text-stone-100 mb-2 max-w-3xl">
+      {/* Header - v6.2.1: Compact */}
+      <header className="sticky top-0 z-30 px-8 py-4 flex-shrink-0 bg-transparent border-b-0">
+        <h1 className="font-serif text-4xl font-normal text-[#0B0F17] dark:text-stone-100 max-w-3xl">
           Bonjour {userName},
         </h1>
       </header>

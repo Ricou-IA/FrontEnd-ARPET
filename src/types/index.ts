@@ -1,7 +1,7 @@
 // ============================================================
-// ARPET - Types unifiés v6.0.1
-// Version: 6.0.1 - Phase 6 : Mémoire Collective (fix compat)
-// Date: 2024-12-31
+// ARPET - Types unifiés v6.1.1
+// Version: 6.1.1 - Fix is_active optionnel dans DocumentCategoryConfig
+// Date: 2025-01-04
 // ============================================================
 
 // ============================================
@@ -256,6 +256,7 @@ export type PromotionStatus = 'draft' | 'pending' | 'approved' | 'rejected';
 
 /**
  * Catégorie de document depuis Supabase (config.document_categories)
+ * v6.1.1: is_active rendu optionnel (colonne peut ne pas exister)
  */
 export interface DocumentCategoryConfig {
   id: string;
@@ -264,7 +265,7 @@ export interface DocumentCategoryConfig {
   description: string | null;
   icon: string | null;
   sort_order: number;
-  is_active: boolean;
+  is_active?: boolean;  // v6.1.1: Optionnel car colonne peut ne pas exister
   target_apps: string[];
   target_layers: DocumentLayer[];
   source_type: string | null;
@@ -274,6 +275,7 @@ export interface DocumentCategoryConfig {
 
 /**
  * Fichier source (table sources.files)
+ * v6.1.0: Ajout can_edit et can_delete depuis la vue files_with_permissions
  */
 export interface SourceFile {
   id: string;
@@ -319,6 +321,16 @@ export interface SourceFile {
   // Timestamps
   created_at: string;
   updated_at: string;
+
+  // =============================================
+  // v6.1.0: PERMISSIONS (depuis vue files_with_permissions)
+  // =============================================
+  
+  /** true si l'utilisateur peut éditer ce document */
+  can_edit?: boolean;
+  
+  /** true si l'utilisateur peut supprimer ce document */
+  can_delete?: boolean;
 }
 
 /**
@@ -341,6 +353,16 @@ export interface SourceMeeting {
   shared_with_team: boolean;
   created_at: string;
   updated_at: string;
+  
+  // =============================================
+  // v6.1.0: PERMISSIONS (depuis vue meetings_with_permissions)
+  // =============================================
+  
+  /** true si l'utilisateur peut éditer cette réunion */
+  can_edit?: boolean;
+  
+  /** true si l'utilisateur peut supprimer cette réunion */
+  can_delete?: boolean;
 }
 
 /**

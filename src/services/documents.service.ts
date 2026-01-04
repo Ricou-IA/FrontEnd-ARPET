@@ -1,7 +1,15 @@
 // ============================================================
 // ARPET - Documents Service (Supabase)
-// Version: 1.5.0 - Fix superadmin access (null app_id/org_id)
-// Date: 2025-12-20
+// Version: 1.6.2 - Fix colonne is_active inexistante
+// Date: 2025-01-04
+// 
+// MODIFICATIONS v1.6.0:
+// - Lectures (SELECT) → sources.files_with_permissions
+// - Écritures (INSERT/UPDATE/DELETE) → sources.files
+// - Permissions can_edit/can_delete calculées côté DB
+// 
+// MODIFICATIONS v1.6.2:
+// - Suppression filtre is_active (colonne inexistante)
 // ============================================================
 
 import { supabase } from '@/lib/supabase';
@@ -61,20 +69,17 @@ export async function getDocumentCategories(
     const profile = await getCurrentProfile();
     const appId = profile.app_id || 'arpet';
 
-    const query = supabase
+    // v1.6.2: Suppression du filtre is_active (colonne inexistante)
+    const { data, error } = await supabase
       .schema('config')
       .from('document_categories')
       .select('*')
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true })
-      .order('label', { ascending: true });
-
-    const { data, error } = await query;
+      .order('sort_order', { ascending: true });
 
     if (error) throw error;
 
     // Filtrer côté client car Supabase ne supporte pas bien les filtres sur arrays
-    const filtered = (data || []).filter(cat => {
+    let filtered = (data || []).filter(cat => {
       // Vérifier target_apps
       const appsMatch = cat.target_apps?.includes('all') || cat.target_apps?.includes(appId);
       if (!appsMatch) return false;
@@ -88,6 +93,12 @@ export async function getDocumentCategories(
       return true;
     });
 
+    // Tri secondaire par label côté client
+    filtered.sort((a, b) => {
+      if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
+      return a.label.localeCompare(b.label);
+    });
+
     return { data: filtered, error: null };
   } catch (error) {
     console.error('getDocumentCategories error:', error);
@@ -96,11 +107,12 @@ export async function getDocumentCategories(
 }
 
 // ============================================================
-// LECTURE - GET FILES
+// LECTURE - GET FILES (via vue files_with_permissions)
 // ============================================================
 
 /**
  * Récupère les fichiers par couche documentaire
+ * Utilise la vue files_with_permissions pour avoir can_edit/can_delete
  * Note: Si app_id ou org_id est null (superadmin), pas de filtre appliqué
  */
 export async function getFilesByLayer(
@@ -114,9 +126,10 @@ export async function getFilesByLayer(
   try {
     const profile = await getCurrentProfile();
 
+    // v1.6.0: Utiliser la vue avec permissions
     let query = supabase
       .schema('sources')
-      .from('files')
+      .from('files_with_permissions')
       .select('*')
       .eq('layer', layer)
       .order('created_at', { ascending: false });
@@ -174,12 +187,14 @@ export async function getFilesByLayer(
 
 /**
  * Récupère un fichier par son ID
+ * Utilise la vue files_with_permissions pour avoir can_edit/can_delete
  */
 export async function getFileById(id: string): Promise<ServiceResult<SourceFile>> {
   try {
+    // v1.6.0: Utiliser la vue avec permissions
     const { data, error } = await supabase
       .schema('sources')
-      .from('files')
+      .from('files_with_permissions')
       .select('*')
       .eq('id', id)
       .single();
@@ -238,10 +253,10 @@ export async function getSourceFileByChunkId(
       return { data: null, error: new Error('Source file not found') };
     }
 
-    // 2. Récupérer le fichier source
+    // 2. Récupérer le fichier source (via vue avec permissions)
     const { data: file, error: fileError } = await supabase
       .schema('sources')
-      .from('files')
+      .from('files_with_permissions')
       .select('*')
       .eq('id', chunk.source_file_id)
       .single();
@@ -265,9 +280,10 @@ export async function getSourceFileById(
   fileId: string
 ): Promise<ServiceResult<SourceFile>> {
   try {
+    // v1.6.0: Utiliser la vue avec permissions
     const { data: file, error } = await supabase
       .schema('sources')
-      .from('files')
+      .from('files_with_permissions')
       .select('*')
       .eq('id', fileId)
       .single();
@@ -284,7 +300,7 @@ export async function getSourceFileById(
 }
 
 // ============================================================
-// CRÉATION - UPLOAD FILE
+// CRÉATION - UPLOAD FILE (écriture sur table files)
 // ============================================================
 
 interface UploadFileInput {
@@ -296,6 +312,7 @@ interface UploadFileInput {
 
 /**
  * Upload un fichier dans le layer 'user' (Perso)
+ * Note: INSERT sur la table files (pas la vue)
  */
 export async function uploadFile(
   input: UploadFileInput
@@ -319,7 +336,7 @@ export async function uploadFile(
 
     if (uploadError) throw uploadError;
 
-    // 2. Créer l'entrée dans sources.files
+    // 2. Créer l'entrée dans sources.files (table, pas vue)
     const fileRecord = {
       original_filename: file.name,
       mime_type: file.type,
@@ -349,8 +366,15 @@ export async function uploadFile(
 
     if (error) throw error;
 
+    // Ajouter les permissions par défaut pour un document user
+    const dataWithPermissions = {
+      ...data,
+      can_edit: true,
+      can_delete: true,
+    };
+
     console.log('✅ File uploaded:', data.id);
-    return { data, error: null };
+    return { data: dataWithPermissions, error: null };
   } catch (error) {
     console.error('uploadFile error:', error);
     return { data: null, error: error as Error };
@@ -358,7 +382,7 @@ export async function uploadFile(
 }
 
 // ============================================================
-// MISE À JOUR - UPDATE FILE
+// MISE À JOUR - UPDATE FILE (écriture sur table files)
 // ============================================================
 
 interface UpdateFileInput {
@@ -369,15 +393,15 @@ interface UpdateFileInput {
 }
 
 /**
- * Met à jour un fichier (uniquement layer 'user' et créé par l'utilisateur)
+ * Met à jour un fichier
+ * Note: UPDATE sur la table files (pas la vue)
+ * v1.6.0: La vérification des droits est faite côté DB (RLS)
  */
 export async function updateFile(
   id: string,
   input: UpdateFileInput
 ): Promise<ServiceResult<SourceFile>> {
   try {
-    const profile = await getCurrentProfile();
-
     // Construire l'objet de mise à jour
     const updateData: Record<string, unknown> = {};
 
@@ -411,13 +435,13 @@ export async function updateFile(
     // Ajouter updated_at
     updateData.updated_at = new Date().toISOString();
 
+    // v1.6.0: Plus de filtre created_by/layer côté client
+    // La RLS vérifie les permissions côté DB
     const { data, error } = await supabase
       .schema('sources')
       .from('files')
       .update(updateData)
       .eq('id', id)
-      .eq('created_by', profile.id)
-      .eq('layer', 'user')
       .select()
       .single();
 
@@ -432,24 +456,22 @@ export async function updateFile(
 }
 
 // ============================================================
-// SUPPRESSION
+// SUPPRESSION (écriture sur table files)
 // ============================================================
 
 /**
- * Supprime un fichier (uniquement layer 'user' et créé par l'utilisateur)
+ * Supprime un fichier
+ * Note: DELETE sur la table files (pas la vue)
+ * v1.6.0: La vérification des droits est faite côté DB (RLS)
  */
 export async function deleteFile(id: string): Promise<ServiceResult<boolean>> {
   try {
-    const profile = await getCurrentProfile();
-
-    // Vérifier que le fichier appartient à l'utilisateur
+    // Récupérer les infos du fichier pour le storage
     const { data: file, error: fetchError } = await supabase
       .schema('sources')
       .from('files')
-      .select('*')
+      .select('storage_bucket, storage_path')
       .eq('id', id)
-      .eq('created_by', profile.id)
-      .eq('layer', 'user')
       .single();
 
     if (fetchError || !file) {
@@ -464,6 +486,7 @@ export async function deleteFile(id: string): Promise<ServiceResult<boolean>> {
     }
 
     // Supprimer l'entrée dans la base
+    // v1.6.0: La RLS vérifie les permissions côté DB
     const { error } = await supabase
       .schema('sources')
       .from('files')
@@ -587,7 +610,7 @@ export async function rejectPromotion(
 }
 
 // ============================================================
-// COMPTAGES
+// COMPTAGES (via vue files_with_permissions)
 // ============================================================
 
 /**
@@ -611,9 +634,10 @@ export async function getFilesCountByLayer(
     const layers: DocumentLayer[] = ['app', 'org', 'project', 'user'];
 
     for (const layer of layers) {
+      // v1.6.0: Utiliser la vue avec permissions
       let query = supabase
         .schema('sources')
-        .from('files')
+        .from('files_with_permissions')
         .select('id', { count: 'exact', head: true })
         .eq('layer', layer);
 
@@ -663,9 +687,10 @@ export async function getPendingPromotionsCount(): Promise<ServiceResult<number>
   try {
     const profile = await getCurrentProfile();
 
+    // v1.6.0: Utiliser la vue avec permissions
     let query = supabase
       .schema('sources')
-      .from('files')
+      .from('files_with_permissions')
       .select('id', { count: 'exact', head: true })
       .eq('promotion_status', 'pending');
 
@@ -766,6 +791,8 @@ export function getMockUserFiles(): SourceFile[] {
       metadata: { category: MOCK_CAT_PIECES_MARCHE, description: 'CCTP Gros Œuvre mis à jour' },
       created_at: yesterday,
       updated_at: yesterday,
+      can_edit: true,
+      can_delete: true,
     },
     {
       id: 'mock-2',
@@ -794,6 +821,8 @@ export function getMockUserFiles(): SourceFile[] {
       metadata: { category: MOCK_CAT_SUIVI },
       created_at: now,
       updated_at: now,
+      can_edit: true,
+      can_delete: true,
     },
     {
       id: 'mock-3',
@@ -822,6 +851,8 @@ export function getMockUserFiles(): SourceFile[] {
       metadata: { category: MOCK_CAT_AUTRES },
       created_at: lastWeek,
       updated_at: yesterday,
+      can_edit: true,
+      can_delete: true,
     },
   ];
 }
