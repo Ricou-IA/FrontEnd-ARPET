@@ -1,8 +1,12 @@
 // ============================================================
 // ARPET - DocumentRow Component
-// Version: 2.3.0 - Utilisation permissions DB (can_edit, can_delete)
+// Version: 2.4.0 - Suppression colonne TYPE
 // Date: 2025-01-04
 // 
+// MODIFICATIONS v2.4.0:
+// - Suppression de la colonne TYPE (icône de fichier)
+// - Retrait de l'import getFileIcon
+//
 // MODIFICATIONS v2.3.0:
 // - Utilise document.can_edit au lieu de documentsActiveLayer === 'user'
 // - Utilise document.can_delete pour le bouton supprimer
@@ -27,7 +31,6 @@ import {
 import { useAppStore } from '@/stores/appStore'
 import { 
   LAYER_CONFIG, 
-  getFileIcon, 
   formatFileSize,
   getPromotionBadge,
   type SourceFile,
@@ -245,9 +248,6 @@ export function DocumentRow({ document }: DocumentRowProps) {
   if (isEditing) {
     return (
       <tr className="bg-gray-50">
-        <td className="py-3">
-          <span className="text-xl">{getFileIcon(document.mime_type)}</span>
-        </td>
         <td className="py-3 px-2">
           <input
             type="text"
@@ -305,10 +305,6 @@ export function DocumentRow({ document }: DocumentRowProps) {
   // Mode affichage
   return (
     <tr className="hover:bg-gray-50 transition group">
-      <td className="py-3">
-        <span className="text-xl">{getFileIcon(document.mime_type)}</span>
-      </td>
-      
       <td className="py-3 px-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-sm font-medium text-[#0B0F17] truncate">

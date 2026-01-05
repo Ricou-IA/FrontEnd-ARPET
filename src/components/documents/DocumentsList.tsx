@@ -1,7 +1,12 @@
 // ============================================================
 // ARPET - DocumentsList Component
-// Version: 2.4.0 - Style Premium avec Empty State corrigé
-// Date: 2025-12-18
+// Version: 2.5.0 - Suppression colonne TYPE
+// Date: 2025-01-04
+//
+// MODIFICATIONS v2.5.0:
+// - Suppression de la colonne TYPE
+// - Ajustement colgroup (4 colonnes au lieu de 5)
+// - Ajustement colSpan (4 au lieu de 5)
 // ============================================================
 
 import { Loader2, FolderOpen, Upload } from 'lucide-react'
@@ -27,7 +32,6 @@ export function DocumentsList({
       {/* Table TOUJOURS présente pour maintenir la structure */}
       <table className="w-full table-fixed">
         <colgroup>
-          <col style={{ width: '50px' }} />
           <col /> {/* Nom prend le reste */}
           <col style={{ width: '110px' }} />
           <col style={{ width: '160px' }} />
@@ -37,9 +41,6 @@ export function DocumentsList({
         {/* Header TOUJOURS visible - SANS bordure */}
         <thead>
           <tr>
-            <th className="py-4 text-left text-xs font-sans font-medium text-gray-400 uppercase tracking-wider">
-              Type
-            </th>
             <th className="py-4 px-2 text-left text-xs font-sans font-medium text-gray-400 uppercase tracking-wider">
               Nom
             </th>
@@ -59,7 +60,7 @@ export function DocumentsList({
         <tbody>
           {loading ? (
             <tr>
-              <td colSpan={5} className="py-12">
+              <td colSpan={4} className="py-12">
                 <div className="flex items-center justify-center">
                   <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
                 </div>
@@ -67,7 +68,7 @@ export function DocumentsList({
             </tr>
           ) : documents.length === 0 ? (
             <tr>
-              <td colSpan={5} className="py-16">
+              <td colSpan={4} className="py-16">
                 <div className="flex flex-col items-center justify-center">
                   {/* Zone délimitée - Fond pur, bordure pointillée fine */}
                   <div className="border-2 border-dashed border-gray-200 rounded-xl p-12 w-full max-w-md bg-gray-50/30">

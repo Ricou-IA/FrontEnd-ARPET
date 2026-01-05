@@ -1,7 +1,10 @@
 // ============================================================
 // ARPET - DocumentsPage Component
-// Version: 2.2.0 - Header aligné sur Dashboard (titre + marges)
+// Version: 2.2.1 - Fix z-index header pour modales
 // Date: 2025-01-04
+//
+// MODIFICATIONS v2.2.1:
+// - z-50 → z-10 sur le header pour éviter de passer au-dessus des modales
 // ============================================================
 
 import { useEffect, useState, useMemo } from 'react'
@@ -86,8 +89,8 @@ export function DocumentsPage() {
 
   return (
     <div className="w-full h-full flex flex-col">
-      {/* Header - v2.2.0: Aligné sur Dashboard */}
-      <header className="sticky top-0 z-50 flex-shrink-0 px-8 pt-4 pb-4 space-y-4 bg-transparent border-b-0">
+      {/* Header - v2.2.1: z-10 pour ne pas passer au-dessus des modales */}
+      <header className="sticky top-0 z-10 flex-shrink-0 px-8 pt-4 pb-4 space-y-4 bg-transparent border-b-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h1 className="font-serif text-4xl font-normal text-[#0B0F17] dark:text-stone-100">
