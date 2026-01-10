@@ -1,7 +1,16 @@
 // ============================================================
 // ARPET - MessageBubble Component
-// Version: 9.0.0 - "Sexy" Revamp
-// Date: 2026-01-03
+// Version: 10.1.0 - Transformation balises cite en italique
+// Date: 2026-01-05
+// Changes:
+//   - Bulles sans fond ni bordure (effet papier quadrillé)
+//   - Message utilisateur en gras
+//   - Suppression badge "Nouvelle réponse"
+//   - Badges sur une seule ligne (type + validations + temps)
+//   - RagBadge uniquement si pas from_memory
+//   - Trait séparation sources accentué
+//   - Tags sources affichés en entier (pas de truncate)
+//   - v10.1.0: Transformation <cite> → italique dans formatContent
 // ============================================================
 
 import { useState, useCallback } from 'react'
@@ -47,7 +56,7 @@ export function MessageBubble({ message, userQuestion, projectId, activeProject,
     return (
       <div className="flex gap-4 justify-end animate-[slideDownFade_0.3s_ease-out]">
         <div className="max-w-4xl w-full flex justify-end">
-          <div className="text-[15px] font-sans text-stone-900 bg-gradient-to-br from-white to-stone-50 border border-stone-200/50 shadow-sm p-5 rounded-2xl rounded-tr-sm">
+          <div className="text-[15px] font-sans text-stone-900 dark:text-stone-100 p-5 font-semibold">
             <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
           </div>
         </div>
@@ -189,25 +198,46 @@ export function MessageBubble({ message, userQuestion, projectId, activeProject,
   // ================================================================
 
   /**
-   * Header selon le type de réponse
+   * Formater le temps de traitement
+   */
+  const formatProcessingTime = (ms?: number): string | null => {
+    if (!ms || ms <= 0) return null
+    return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
+  }
+
+  /**
+   * Header selon le type de réponse (badges sur une seule ligne)
+   * - FAQ Expert
+   * - Mémoire Collective
+   * - Validée par l'équipe
+   * - Rien pour les nouvelles réponses RAG (plus de "Nouvelle réponse")
    */
   const renderKnowledgeHeader = () => {
-    if (message.from_memory) {
-      if (message.qa_memory_is_expert) {
-        return (
-          <div className="flex items-center gap-2 mb-4 pb-0">
-            <span className="bg-amber-500/10 text-amber-600 dark:text-amber-500 border border-amber-500/20 text-[11px] px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1.5 shadow-sm">
-              ⭐ FAQ Expert
-            </span>
-            <span className="text-[11px] text-stone-400 font-medium">
-              Réponse instantanée
-            </span>
-          </div>
-        )
-      }
+    const processingTime = formatProcessingTime(message.processing_time_ms)
 
+    // Cas 1: FAQ Expert
+    if (message.from_memory && message.qa_memory_is_expert) {
       return (
-        <div className="flex items-center gap-2 mb-4 pb-0">
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <span className="bg-amber-500/10 text-amber-600 dark:text-amber-500 border border-amber-500/20 text-[11px] px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1.5 shadow-sm">
+            ⭐ FAQ Expert
+          </span>
+          <span className="text-[11px] text-stone-400 font-medium">
+            Réponse instantanée
+          </span>
+          {processingTime && (
+            <span className="text-[11px] text-stone-400">
+              {processingTime}
+            </span>
+          )}
+        </div>
+      )
+    }
+
+    // Cas 2: Mémoire Collective
+    if (message.from_memory) {
+      return (
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
           <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 border border-emerald-500/20 text-[11px] px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1.5 shadow-sm">
             <Brain className="w-3 h-3" />
             Mémoire Collective
@@ -217,13 +247,19 @@ export function MessageBubble({ message, userQuestion, projectId, activeProject,
               {localTrustScore} validation{localTrustScore > 1 ? 's' : ''}
             </span>
           )}
+          {processingTime && (
+            <span className="text-[11px] text-stone-400">
+              {processingTime}
+            </span>
+          )}
         </div>
       )
     }
 
+    // Cas 3: Validée par l'équipe (team_validated)
     if (message.knowledge_type === 'team_validated' || localTrustScore >= 3) {
       return (
-        <div className="flex items-center gap-2 mb-4 pb-0">
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
           <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 border border-emerald-500/20 text-[11px] px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1.5 shadow-sm">
             <Check className="w-3 h-3" />
             Validée par l'équipe
@@ -233,20 +269,39 @@ export function MessageBubble({ message, userQuestion, projectId, activeProject,
               {localTrustScore} validation{localTrustScore > 1 ? 's' : ''}
             </span>
           )}
+          {processingTime && (
+            <span className="text-[11px] text-stone-400">
+              {processingTime}
+            </span>
+          )}
         </div>
       )
     }
 
-    // Nouvelle réponse RAG
+    // Cas 4: Nouvelle réponse RAG → pas de header badge
+    // On laisse RagBadge gérer l'affichage du mode + temps
+    return null
+  }
+
+  /**
+   * Afficher RagBadge uniquement si pas from_memory
+   */
+  const renderRagBadge = () => {
+    // Ne pas afficher RagBadge si c'est une réponse mémoire (déjà dans le header)
+    if (message.from_memory) return null
+
+    // Ne pas afficher si pas d'info de génération
+    if (!message.generation_mode && !message.generation_mode_ui) return null
+
     return (
-      <div className="flex items-center gap-2 mb-4 pb-0">
-        <span className="bg-blue-500/10 text-blue-600 dark:text-blue-500 border border-blue-500/20 text-[11px] px-2.5 py-0.5 rounded-full font-bold shadow-sm">
-          ✨ Nouvelle réponse
-        </span>
-        <span className="text-[11px] text-stone-400 font-medium">
-          Votez 👍 si utile
-        </span>
-      </div>
+      <RagBadge
+        generationMode={message.generation_mode}
+        generationModeUi={message.generation_mode_ui}
+        cacheStatus={message.cache_status}
+        processingTimeMs={message.processing_time_ms}
+        documentsFound={message.documents_found}
+        className="mb-4"
+      />
     )
   }
 
@@ -257,7 +312,7 @@ export function MessageBubble({ message, userQuestion, projectId, activeProject,
     if (!message.sources || message.sources.length === 0) return null
 
     return (
-      <div className="mt-5 pt-4 border-t border-stone-200/50 dark:border-white/5">
+      <div className="mt-5 pt-4 border-t-2 border-stone-300 dark:border-stone-600">
         <p className="text-[11px] text-stone-400 dark:text-stone-500 font-bold uppercase tracking-wider mb-2">Sources</p>
         <div className="flex flex-wrap gap-2">
           {message.sources.map((source, index) => (
@@ -285,25 +340,13 @@ export function MessageBubble({ message, userQuestion, projectId, activeProject,
       </div>
 
       <div className="flex-1 max-w-4xl">
-        {/* Bulle principale - Glassmorphism */}
-        <div className="relative text-[15px] text-stone-700 dark:text-stone-200 leading-relaxed 
-          bg-white/80 dark:bg-stone-900/80 backdrop-blur-md
-          border border-stone-200/60 dark:border-white/10 
-          p-6 rounded-2xl rounded-tl-sm shadow-sm hover:shadow-md transition-shadow duration-300">
+        {/* Bulle principale - Transparente pour effet papier quadrillé */}
+        <div className="relative text-[15px] text-stone-700 dark:text-stone-200 leading-relaxed p-6">
 
           {renderKnowledgeHeader()}
 
-          {/* Badge RAG (mode de génération) */}
-          {(message.generation_mode || message.generation_mode_ui) && (
-            <RagBadge
-              generationMode={message.generation_mode}
-              generationModeUi={message.generation_mode_ui}
-              cacheStatus={message.cache_status}
-              processingTimeMs={message.processing_time_ms}
-              documentsFound={message.documents_found}
-              className="mb-4"
-            />
-          )}
+          {/* Badge RAG (mode de génération) - uniquement si pas from_memory */}
+          {renderRagBadge()}
 
           {/* Contenu du message */}
           <div
@@ -455,7 +498,7 @@ function SourceBadge({ source, onOpenViewer }: SourceBadgeProps) {
     }
   }
 
-  // Badge pour qa_memory
+  // Badge pour qa_memory - texte complet sans truncate
   if (isQAMemory) {
     return (
       <span
@@ -467,14 +510,14 @@ function SourceBadge({ source, onOpenViewer }: SourceBadgeProps) {
       >
         {source.authority_label === 'expert' && '⭐'}
         {source.authority_label === 'team' && '✓'}
-        <span className="truncate max-w-[140px] font-medium">
+        <span className="font-medium">
           {source.document_name || source.name || 'Mémoire collective'}
         </span>
       </span>
     )
   }
 
-  // Badge pour document
+  // Badge pour document - texte complet sans truncate
   const displayName = source.document_name || source.name || 'Document'
 
   return (
@@ -482,7 +525,7 @@ function SourceBadge({ source, onOpenViewer }: SourceBadgeProps) {
       className="text-[11px] bg-stone-50 border border-stone-200 text-stone-500 px-2.5 py-1 rounded-md flex items-center gap-2 group/source transition-colors hover:bg-stone-100 hover:border-stone-300"
       title={source.content_preview || 'Document source'}
     >
-      <span className="truncate max-w-[180px] font-medium">
+      <span className="font-medium">
         {displayName}
       </span>
       {source.score !== undefined && (
@@ -507,15 +550,29 @@ function SourceBadge({ source, onOpenViewer }: SourceBadgeProps) {
   )
 }
 
+/**
+ * Formate le contenu du message avec support Markdown et citations
+ * - Transforme **bold** et __bold__ en <strong>
+ * - Transforme *italic* en <em>
+ * - Transforme `code` en <code>
+ * - Transforme les listes - et 1.
+ * - Transforme <cite doc="..." page="...">texte</cite> en italique
+ * - Gère les sauts de ligne
+ */
 function formatContent(content: string): string {
   let formatted = content
 
-  formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-stone-900">$1</strong>')
-  formatted = formatted.replace(/__(.+?)__/g, '<strong class="font-semibold text-stone-900">$1</strong>')
-  formatted = formatted.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em class="italic text-stone-800">$1</em>')
-  formatted = formatted.replace(/`([^`]+)`/g, '<code class="bg-stone-100 border border-stone-200 px-1.5 py-0.5 rounded text-[13px] font-mono text-stone-800">$1</code>')
+  // Transformer les balises <cite> en italique (AVANT les autres transformations)
+  // Format: <cite doc="CCAG" page="23">section 19.3</cite> → *section 19.3*
+  formatted = formatted.replace(/<cite[^>]*>([^<]*)<\/cite>/g, '<em class="italic text-stone-600 dark:text-stone-400">$1</em>')
+
+  // Markdown classique
+  formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-stone-900 dark:text-stone-100">$1</strong>')
+  formatted = formatted.replace(/__(.+?)__/g, '<strong class="font-semibold text-stone-900 dark:text-stone-100">$1</strong>')
+  formatted = formatted.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em class="italic text-stone-800 dark:text-stone-300">$1</em>')
+  formatted = formatted.replace(/`([^`]+)`/g, '<code class="bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 px-1.5 py-0.5 rounded text-[13px] font-mono text-stone-800 dark:text-stone-200">$1</code>')
   formatted = formatted.replace(/^- (.+)$/gm, '<span class="inline-block ml-2 text-stone-400 mr-2">•</span>$1')
-  formatted = formatted.replace(/^(\d+)\. (.+)$/gm, '<span class="font-bold text-stone-800 mr-1">$1.</span> $2')
+  formatted = formatted.replace(/^(\d+)\. (.+)$/gm, '<span class="font-bold text-stone-800 dark:text-stone-200 mr-1">$1.</span> $2')
   formatted = formatted.replace(/\n\n/g, '</p><p class="mt-4">')
   formatted = formatted.replace(/\n/g, '<br>')
 

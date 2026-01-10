@@ -1,3 +1,13 @@
+// ============================================================
+// ARPET - StreamingBubble Component
+// Version: 4.0.0 - Bulle transparente + masquage citations
+// Date: 2026-01-05
+// Changes:
+//   - Suppression fond/bordure/shadow (effet papier quadrillé)
+//   - Masquage des balises <cite> pendant le streaming
+//   - Lecture fluide sans interruption
+// ============================================================
+
 import { memo } from 'react'
 import type { SSEStepEvent } from '../../services/chat.service'
 
@@ -19,9 +29,9 @@ function StepsIndicator({ steps, isComplete }: StepsIndicatorProps) {
                     <div
                         key={`${step.step}-${index}`}
                         className={`
-              flex items-center gap-2 text-[11px] transition-all duration-300
-              ${isDone ? 'text-stone-400 dark:text-stone-500' : 'text-stone-600 dark:text-stone-300'}
-            `}
+                            flex items-center gap-2 text-[11px] transition-all duration-300
+                            ${isDone ? 'text-stone-400 dark:text-stone-500' : 'text-stone-600 dark:text-stone-300'}
+                        `}
                     >
                         {/* Icône : check si terminé, spinner si en cours */}
                         <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 ${isDone ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-stone-100 dark:bg-stone-800'}`}>
@@ -62,6 +72,15 @@ function StepsIndicator({ steps, isComplete }: StepsIndicatorProps) {
     )
 }
 
+/**
+ * Nettoyer le contenu pour le streaming
+ * - Supprime les balises <cite> pour une lecture fluide
+ */
+function cleanStreamingContent(content: string): string {
+    // Supprimer les balises <cite doc="..." page="...">texte</cite>
+    return content.replace(/<cite[^>]*>[^<]*<\/cite>/g, '')
+}
+
 interface StreamingBubbleProps {
     content: string
     steps: SSEStepEvent[]
@@ -73,16 +92,17 @@ export const StreamingBubble = memo(function StreamingBubble({
     steps,
     stepsComplete
 }: StreamingBubbleProps) {
+    // Nettoyer le contenu (masquer les citations)
+    const displayContent = cleanStreamingContent(content)
+
     return (
         <div className="flex gap-5 animate-[slideDownFade_0.3s_ease-out]">
             <div className="w-9 h-9 rounded-xl bg-stone-900 dark:bg-white flex items-center justify-center text-white dark:text-stone-900 font-serif italic text-sm flex-shrink-0 mt-1 shadow-md shadow-stone-900/10">
                 A
             </div>
             <div className="flex-1 max-w-4xl">
-                <div className="relative text-[15px] text-stone-700 dark:text-stone-200 leading-relaxed 
-          bg-white/80 dark:bg-stone-900/80 backdrop-blur-md
-          border border-stone-200/60 dark:border-white/10 
-          p-6 rounded-2xl rounded-tl-sm shadow-sm">
+                {/* Zone de contenu - Transparente pour effet papier quadrillé */}
+                <div className="relative text-[15px] text-stone-700 dark:text-stone-200 leading-relaxed p-6">
 
                     {/* Indicateur d'étapes */}
                     {steps.length > 0 && (
@@ -90,9 +110,9 @@ export const StreamingBubble = memo(function StreamingBubble({
                     )}
 
                     {/* Contenu en streaming */}
-                    {content ? (
+                    {displayContent ? (
                         <div className="prose prose-sm prose-stone dark:prose-invert max-w-none font-sans whitespace-pre-wrap">
-                            {content}
+                            {displayContent}
                             <span className="inline-block w-1.5 h-4 bg-stone-400 dark:bg-stone-500 animate-pulse ml-0.5 align-middle rounded-full" />
                         </div>
                     ) : steps.length === 0 ? (
