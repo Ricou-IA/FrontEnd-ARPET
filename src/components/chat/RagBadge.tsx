@@ -34,7 +34,6 @@ export function RagBadge({
   if (!generationMode && !generationModeUi) return null
 
   const isGemini = generationMode === 'gemini'
-  const isMemory = generationMode === 'memory' || generationModeUi === 'Mémoire Collective'
   const isFullDocument = generationModeUi === 'Full Document' || isGemini
 
   // Styles selon le mode
