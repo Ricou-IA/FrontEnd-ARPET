@@ -1,7 +1,7 @@
 // ============================================================
 // ARPET - Main App Component with Routing
-// Version: 4.0.0 - Architecture Marketing/App séparée
-// Date: 2025-12-18
+// Version: 4.1.0 - Toggle RAG v2/v3
+// Date: 2025-01-15
 // ============================================================
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
@@ -14,6 +14,7 @@ import { Login } from './pages/Login'
 import { Dashboard } from './pages/Dashboard'
 import { Documents } from './pages/Documents'
 import { Settings } from './pages/Settings'
+import { RagVersionToggle } from './components/RagVersionToggle'
 
 // ============================================================
 // LOADING SCREEN
@@ -83,6 +84,8 @@ function PublicRoute({ children }: PublicRouteProps) {
 // ============================================================
 
 function App() {
+  const { user } = useAuth()
+
   return (
     <ThemeProvider defaultTheme="light">
       <BrowserRouter
@@ -128,6 +131,12 @@ function App() {
           {/* ================================ */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+
+        {/* ================================ */}
+        {/* Toggle RAG v2/v3 (dev/test)     */}
+        {/* Visible uniquement si connecté  */}
+        {/* ================================ */}
+        {user && <RagVersionToggle showDetails />}
       </BrowserRouter>
     </ThemeProvider>
   )

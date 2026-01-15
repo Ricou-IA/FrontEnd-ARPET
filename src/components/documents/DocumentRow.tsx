@@ -1,8 +1,12 @@
 // ============================================================
 // ARPET - DocumentRow Component
-// Version: 2.4.0 - Suppression colonne TYPE
-// Date: 2025-01-04
+// Version: 2.5.0 - Affichage document_title + extension
+// Date: 2025-01-15
 // 
+// MODIFICATIONS v2.5.0:
+// - Affiche document_title.extension au lieu de original_filename
+// - Fallback sur original_filename si document_title absent
+//
 // MODIFICATIONS v2.4.0:
 // - Suppression de la colonne TYPE (icône de fichier)
 // - Retrait de l'import getFileIcon
@@ -79,6 +83,11 @@ export function DocumentRow({ document }: DocumentRowProps) {
   // v2.3.0: Permissions depuis la DB
   const canEdit = document.can_edit ?? false
   const canDelete = document.can_delete ?? false
+
+  // v2.5.0: Nom d'affichage = document_title.extension ou fallback original_filename
+  const displayName = document.metadata?.document_title 
+    ? `${document.metadata.document_title}.${document.original_filename.split('.').pop()}`
+    : document.original_filename
 
   // v2.3.0: Charger les catégories au montage (pour affichage dans la liste)
   useEffect(() => {
@@ -177,7 +186,7 @@ export function DocumentRow({ document }: DocumentRowProps) {
 
   const handleDelete = async () => {
     if (isDeleting) return
-    if (!confirm(`Supprimer "${document.original_filename}" ?`)) return
+    if (!confirm(`Supprimer "${displayName}" ?`)) return
     setIsDeleting(true)
     try {
       await deleteDocument(document.id)
@@ -308,7 +317,7 @@ export function DocumentRow({ document }: DocumentRowProps) {
       <td className="py-3 px-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-sm font-medium text-[#0B0F17] truncate">
-            {document.original_filename}
+            {displayName}
           </span>
           <ProcessingIcon />
           {promotionBadge && (

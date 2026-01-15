@@ -1,7 +1,11 @@
 // ============================================================
 // ARPET - RagBadge Component
-// Version: 3.0.0 - Phase 6 : Support mode 'memory'
-// Date: 2024-12-31
+// Version: 3.1.0 - Masquage du nombre de documents
+// Date: 2026-01-14
+// ============================================================
+// Changements v3.1.0:
+// - Suppression de l'affichage "X docs" (perturbant si file_filter échoue)
+// - Le nombre reste loggé côté serveur dans Supabase
 // ============================================================
 
 import { Database, Zap, FileText, Brain } from 'lucide-react'
@@ -14,7 +18,7 @@ interface RagBadgeProps {
   generationModeUi?: string  // "Full Document", "RAG Chunks", "Mémoire Collective"
   cacheStatus?: CacheStatus
   processingTimeMs?: number
-  documentsFound?: number
+  documentsFound?: number  // Conservé pour compatibilité mais non affiché
   className?: string
 }
 
@@ -23,7 +27,7 @@ export function RagBadge({
   generationModeUi,
   cacheStatus, 
   processingTimeMs,
-  documentsFound,
+  // documentsFound non utilisé dans l'UI
   className = '' 
 }: RagBadgeProps) {
   // Ne rien afficher si pas d'info
@@ -56,7 +60,6 @@ export function RagBadge({
       icon: <Zap className="w-3 h-3" />,
       label: 'Hybride'
     },
-    // v3.0.0: Nouveau mode Mémoire Collective
     memory: {
       bg: 'bg-green-50 dark:bg-green-900/30',
       border: 'border-green-200 dark:border-green-800',
@@ -130,12 +133,7 @@ export function RagBadge({
       {/* Cache Status (Full Document only) */}
       {renderCacheStatus()}
 
-      {/* Documents count - pas affiché pour mode memory */}
-      {!isMemory && documentsFound !== undefined && documentsFound > 0 && (
-        <span className="text-[10px] text-stone-400 dark:text-stone-500">
-          {documentsFound} doc{documentsFound > 1 ? 's' : ''}
-        </span>
-      )}
+      {/* v3.1.0: Nombre de documents masqué (reste loggé côté serveur) */}
 
       {/* Processing time */}
       {processingTimeMs !== undefined && processingTimeMs > 0 && (

@@ -1,8 +1,7 @@
 // ============================================================
 // ARPET - Chat Service
-// Version: 2.2.0 - Parsing SSE robuste
-// Date: 2024-12-31
-// Fix: Parsing simplifié pour ne pas perdre de tokens
+// Version: 3.0.0 - Toggle v2/v3
+// Date: 2025-01-15
 // ============================================================
 
 import { supabase } from '../lib/supabase'
@@ -14,10 +13,53 @@ import type {
 } from '../types'
 
 // ============================================================
-// CONFIGURATION
+// CONFIGURATION - TOGGLE v2/v3
 // ============================================================
 
-const RAG_ENDPOINT = 'baikal-brain'
+const RAG_ENDPOINTS = {
+  v2: 'baikal-brain',
+  v3: 'baikal-brain-v3',
+} as const
+
+type RagVersion = keyof typeof RAG_ENDPOINTS
+
+// Clé localStorage pour persister le choix
+const RAG_VERSION_KEY = 'arpet_rag_version'
+
+// État actuel (initialisé depuis localStorage ou défaut v2)
+let currentVersion: RagVersion = (localStorage.getItem(RAG_VERSION_KEY) as RagVersion) || 'v2'
+
+/**
+ * Récupère la version RAG actuelle
+ */
+export function getRagVersion(): RagVersion {
+  return currentVersion
+}
+
+/**
+ * Change la version RAG (v2 ou v3)
+ */
+export function setRagVersion(version: RagVersion): void {
+  currentVersion = version
+  localStorage.setItem(RAG_VERSION_KEY, version)
+  console.log(`[ChatService] 🔄 Version RAG changée: ${version} → ${RAG_ENDPOINTS[version]}`)
+}
+
+/**
+ * Toggle entre v2 et v3
+ */
+export function toggleRagVersion(): RagVersion {
+  const newVersion = currentVersion === 'v2' ? 'v3' : 'v2'
+  setRagVersion(newVersion)
+  return newVersion
+}
+
+/**
+ * Récupère l'endpoint actuel
+ */
+function getEndpoint(): string {
+  return RAG_ENDPOINTS[currentVersion]
+}
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -78,6 +120,10 @@ interface RawChatResponse {
     detected_documents: string[]
     reasoning: string
   }
+  // v3: Nouveaux champs
+  cache_type?: string
+  answer_format?: string
+  timings?: Record<string, number>
 }
 
 export interface ChatResponse {
@@ -111,6 +157,11 @@ export interface ChatResponse {
   is_follow_up?: boolean
   cache_hits?: number
   cache_misses?: number
+  // v3: Nouveaux champs
+  cache_type?: string
+  answer_format?: string
+  timings?: Record<string, number>
+  rag_version?: RagVersion
 }
 
 export interface ChatResult {
@@ -159,8 +210,12 @@ interface SSESourcesPayload {
   cache_hits?: number
   cache_misses?: number
   cache_status?: string | null
+  cache_type?: string
+  cache_reused?: boolean
   intent?: string | null
+  answer_format?: string
   query_rewritten?: boolean
+  timings?: Record<string, number>
 }
 
 // ============================================================
@@ -264,6 +319,11 @@ function mapResponse(raw: RawChatResponse): ChatResponse {
     can_vote: raw.can_vote,
     vote_context: mapVoteContext(raw.vote_context),
     analysis: raw.analysis,
+    // v3
+    cache_type: raw.cache_type,
+    answer_format: raw.answer_format,
+    timings: raw.timings,
+    rag_version: currentVersion,
   }
 }
 
@@ -284,6 +344,11 @@ function mapSSESourcesPayload(payload: SSESourcesPayload): Partial<ChatResponse>
     is_follow_up: payload.is_follow_up,
     cache_hits: payload.cache_hits,
     cache_misses: payload.cache_misses,
+    // v3
+    cache_type: payload.cache_type,
+    answer_format: payload.answer_format,
+    timings: payload.timings,
+    rag_version: currentVersion,
   }
 }
 
@@ -309,7 +374,8 @@ export async function sendMessage(request: ChatRequest): Promise<ChatResult> {
       throw new Error('La question est requise')
     }
 
-    console.log(`[ChatService] Envoi vers ${RAG_ENDPOINT}`)
+    const endpoint = getEndpoint()
+    console.log(`[ChatService] Envoi vers ${endpoint} (${currentVersion})`)
 
     const body: Record<string, unknown> = {
       query: query.trim(),
@@ -327,14 +393,14 @@ export async function sendMessage(request: ChatRequest): Promise<ChatResult> {
     if (rewritten_query) body.rewritten_query = rewritten_query
     if (detected_documents?.length) body.detected_documents = detected_documents
 
-    const { data, error } = await supabase.functions.invoke(RAG_ENDPOINT, { body })
+    const { data, error } = await supabase.functions.invoke(endpoint, { body })
 
     if (error) {
       console.error(`[ChatService] Erreur Edge Function:`, error)
       throw error
     }
 
-    console.log(`[ChatService] Réponse reçue en ${data?.processing_time_ms || '?'}ms`)
+    console.log(`[ChatService] Réponse reçue en ${data?.processing_time_ms || '?'}ms (${currentVersion})`)
 
     return {
       data: mapResponse(data as RawChatResponse),
@@ -350,7 +416,7 @@ export async function sendMessage(request: ChatRequest): Promise<ChatResult> {
 }
 
 // ============================================================
-// SERVICE - STREAMING SSE (v2.2.0 - Parsing robuste)
+// SERVICE - STREAMING SSE
 // ============================================================
 
 export type OnTokenCallback = (token: string) => void
@@ -367,7 +433,7 @@ export interface StreamOptions {
 }
 
 /**
- * v2.2.0: Traite un événement SSE
+ * Traite un événement SSE
  */
 function processSSEEvent(
   eventType: string,
@@ -395,7 +461,7 @@ function processSSEEvent(
           if (timing.firstTokenTime === null) {
             timing.firstTokenTime = Date.now()
             const latency = timing.firstTokenTime - timing.startTime
-            console.log(`[ChatService] ⚡ Premier token reçu en ${latency}ms`)
+            console.log(`[ChatService] ⚡ Premier token reçu en ${latency}ms (${currentVersion})`)
           }
           options.onToken(parsed.content)
         }
@@ -410,6 +476,13 @@ function processSSEEvent(
         console.log(`[ChatService] Sources: ${mappedSources.length} documents`)
         console.log(`[ChatService] Mode: ${sourcesPayload.generation_mode_ui || sourcesPayload.generation_mode}`)
         console.log(`[ChatService] Temps total: ${sourcesPayload.processing_time_ms}ms`)
+        // v3: Afficher le type de cache
+        if (sourcesPayload.cache_type) {
+          console.log(`[ChatService] Cache: ${sourcesPayload.cache_type} (reused=${sourcesPayload.cache_reused})`)
+        }
+        if (sourcesPayload.timings) {
+          console.log(`[ChatService] Timings:`, sourcesPayload.timings)
+        }
         break
       }
 
@@ -431,7 +504,6 @@ function processSSEEvent(
 
 /**
  * Envoie un message avec streaming SSE
- * v2.2.0: Parsing ligne par ligne simplifié et robuste
  */
 export async function sendMessageStream(
   request: ChatRequest,
@@ -468,7 +540,8 @@ export async function sendMessageStream(
     return controller
   }
 
-  console.log(`[ChatService] 🚀 Streaming SSE vers ${RAG_ENDPOINT}`)
+  const endpoint = getEndpoint()
+  console.log(`[ChatService] 🚀 Streaming SSE vers ${endpoint} (${currentVersion})`)
 
   const body: Record<string, unknown> = {
     query: query.trim(),
@@ -493,7 +566,7 @@ export async function sendMessageStream(
     ; (async () => {
       try {
         const response = await fetch(
-          `${SUPABASE_URL}/functions/v1/${RAG_ENDPOINT}`,
+          `${SUPABASE_URL}/functions/v1/${endpoint}`,
           {
             method: 'POST',
             headers: {
@@ -507,7 +580,7 @@ export async function sendMessageStream(
         )
 
         const fetchTime = Date.now() - timing.startTime
-        console.log(`[ChatService] 📡 Connexion établie en ${fetchTime}ms`)
+        console.log(`[ChatService] 📡 Connexion établie en ${fetchTime}ms (${currentVersion})`)
 
         if (!response.ok) {
           const errorText = await response.text()
@@ -590,7 +663,7 @@ export async function sendMessageStream(
         }
 
         const totalTime = Date.now() - timing.startTime
-        console.log(`[ChatService] 🏁 Durée totale: ${totalTime}ms`)
+        console.log(`[ChatService] 🏁 Durée totale: ${totalTime}ms (${currentVersion})`)
 
         options.onComplete?.()
 
@@ -615,4 +688,7 @@ export async function sendMessageStream(
 export default {
   sendMessage,
   sendMessageStream,
+  getRagVersion,
+  setRagVersion,
+  toggleRagVersion,
 }
