@@ -1,0 +1,12 @@
+# Robots.txt pour arpet.ai
+# https://arpet.ai/robots.txt
+
+User-agent: *
+Allow: /
+
+# Bloquer les pages d'authentification et les assets internes
+Disallow: /auth/
+Disallow: /api/
+
+# Sitemap (à créer plus tard si besoin)
+# Sitemap: https://arpet.ai/sitemap.xml
