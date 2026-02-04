@@ -62,6 +62,7 @@ export function SourceBadge({ source, onOpenViewer }: SourceBadgeProps) {
         url: url,
         mimeType: file.mime_type,
         fileSize: file.file_size,
+        initialPage: source.page || undefined,
       }
 
       onOpenViewer(viewerDoc)
@@ -92,30 +93,36 @@ export function SourceBadge({ source, onOpenViewer }: SourceBadgeProps) {
 
   // Badge pour document
   const displayName = source.document_name || source.name || 'Document'
+  const pageLabel = source.page ? ` (p.${source.page})` : ''
+
+  if (isDocument) {
+    return (
+      <button
+        onClick={handleViewDocument}
+        disabled={isLoading}
+        className="text-[10px] italic bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 px-2 py-0.5 rounded flex items-center gap-1.5 hover:bg-stone-200 dark:hover:bg-stone-700 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer disabled:opacity-50"
+        title={source.content_preview || 'Cliquer pour ouvrir le document'}
+      >
+        {isLoading ? (
+          <Loader2 className="w-3 h-3 animate-spin" />
+        ) : (
+          <Eye className="w-3 h-3" />
+        )}
+        <span className="truncate max-w-[150px]">
+          {displayName}{pageLabel}
+        </span>
+      </button>
+    )
+  }
 
   return (
     <span
-      className="text-[10px] bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 px-2 py-0.5 rounded flex items-center gap-1.5 group/source"
+      className="text-[10px] italic bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 px-2 py-0.5 rounded flex items-center gap-1.5"
       title={source.content_preview || 'Document source'}
     >
       <span className="truncate max-w-[150px]">
         {displayName}
       </span>
-
-      {isDocument && (
-        <button
-          onClick={handleViewDocument}
-          disabled={isLoading}
-          className="p-0.5 rounded hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-50"
-          title="Voir le document"
-        >
-          {isLoading ? (
-            <Loader2 className="w-3 h-3 animate-spin" />
-          ) : (
-            <Eye className="w-3 h-3" />
-          )}
-        </button>
-      )}
     </span>
   )
 }

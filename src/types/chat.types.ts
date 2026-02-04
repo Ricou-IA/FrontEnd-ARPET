@@ -44,6 +44,9 @@ export interface MessageSource {
   score?: number;
   layer?: string;
 
+  // Navigation document
+  page?: number;
+
   // Rétro-compat
   document_id?: string;
   chunk_id?: string;
@@ -120,6 +123,19 @@ export interface Message {
 
   /** Vote de l'utilisateur courant sur ce message */
   user_vote?: 'up' | 'down' | null;
+
+  // =============================================
+  // CROSS-RÉFÉRENCEMENT
+  // =============================================
+
+  /** Actions de croisement proposées par le backend (Comparer, Synthétiser, Conformité) */
+  cross_ref_actions?: Array<{
+    type: 'compare' | 'synthesize' | 'compliance'
+    label: string
+    description: string
+    documents: string[]
+    prompt_hint: string
+  }>;
 
   // État UI
   isStreaming?: boolean;

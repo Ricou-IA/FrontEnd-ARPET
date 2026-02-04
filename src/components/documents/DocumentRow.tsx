@@ -2,54 +2,23 @@
 // ARPET - DocumentRow Component
 // Version: 2.5.0 - Affichage document_title + extension
 // Date: 2025-01-15
-// 
-// MODIFICATIONS v2.5.0:
-// - Affiche document_title.extension au lieu de original_filename
-// - Fallback sur original_filename si document_title absent
-//
-// MODIFICATIONS v2.4.0:
-// - Suppression de la colonne TYPE (icône de fichier)
-// - Retrait de l'import getFileIcon
-//
-// MODIFICATIONS v2.3.0:
-// - Utilise document.can_edit au lieu de documentsActiveLayer === 'user'
-// - Utilise document.can_delete pour le bouton supprimer
-// - Charge les catégories au montage (pas seulement en mode édition)
-// - Charge les projets seulement en mode édition
 // ============================================================
 
 import { useState, useEffect } from 'react'
-import { 
-  Eye, 
-  Download, 
-  Upload, 
-  Trash2, 
-  Loader2,
-  Clock,
-  CheckCircle,
-  AlertCircle,
-  Pencil,
-  X,
-  Check
-} from 'lucide-react'
 import { useAppStore } from '@/stores/appStore'
-import { 
-  LAYER_CONFIG, 
-  formatFileSize,
-  getPromotionBadge,
-  type SourceFile,
-  type ViewerDocument
-} from '@/types'
+import { LAYER_CONFIG, type SourceFile, type ViewerDocument } from '@/types'
 import { getFileDownloadUrl } from '@/services/documents.service'
+import { DocumentRowView } from './document-row/DocumentRowView'
+import { DocumentRowEdit } from './document-row/DocumentRowEdit'
 
 interface DocumentRowProps {
   document: SourceFile
 }
 
 export function DocumentRow({ document }: DocumentRowProps) {
-  const { 
-    documentsActiveLayer, 
-    deleteDocument, 
+  const {
+    documentsActiveLayer,
+    deleteDocument,
     requestDocumentPromotion,
     updateDocument,
     userProjects,
@@ -58,7 +27,7 @@ export function DocumentRow({ document }: DocumentRowProps) {
     fetchDocumentCategories,
     openViewer
   } = useAppStore()
-  
+
   const [isDeleting, setIsDeleting] = useState(false)
   const [isPromoting, setIsPromoting] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
@@ -72,24 +41,28 @@ export function DocumentRow({ document }: DocumentRowProps) {
   const [editProjectId, setEditProjectId] = useState<string | null>(document.project_id)
 
   const layerConfig = LAYER_CONFIG[documentsActiveLayer]
-  
+
   const categoryId = document.metadata?.category as string | undefined
-  const categoryConfig = categoryId 
+  const categoryConfig = categoryId
     ? availableCategories.find(c => c.id === categoryId)
     : null
-  
-  const promotionBadge = getPromotionBadge(document.promotion_status)
 
   // v2.3.0: Permissions depuis la DB
   const canEdit = document.can_edit ?? false
   const canDelete = document.can_delete ?? false
 
   // v2.5.0: Nom d'affichage = document_title.extension ou fallback original_filename
-  const displayName = document.metadata?.document_title 
+  const displayName = document.metadata?.document_title
     ? `${document.metadata.document_title}.${document.original_filename.split('.').pop()}`
     : document.original_filename
 
-  // v2.3.0: Charger les catégories au montage (pour affichage dans la liste)
+  const formattedDate = new Date(document.created_at).toLocaleDateString('fr-FR', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  })
+
+  // v2.3.0: Charger les catégories au montage
   useEffect(() => {
     if (availableCategories.length === 0) {
       fetchDocumentCategories()
@@ -110,16 +83,9 @@ export function DocumentRow({ document }: DocumentRowProps) {
     setIsEditing(false)
   }
 
-  const formattedDate = new Date(document.created_at).toLocaleDateString('fr-FR', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric'
-  })
-
-  // Ouvrir le document dans le Split View
   const handleView = async () => {
     if (isLoadingUrl || !document.storage_path) return
-    
+
     setIsLoadingUrl(true)
     try {
       const { data: url, error } = await getFileDownloadUrl(
@@ -146,7 +112,6 @@ export function DocumentRow({ document }: DocumentRowProps) {
     }
   }
 
-  // Télécharger le document
   const handleDownload = async () => {
     if (!document.storage_path) return
 
@@ -161,7 +126,6 @@ export function DocumentRow({ document }: DocumentRowProps) {
         return
       }
 
-      // Ouvrir dans un nouvel onglet pour télécharger
       const link = window.document.createElement('a')
       link.href = url
       link.download = document.original_filename
@@ -198,7 +162,7 @@ export function DocumentRow({ document }: DocumentRowProps) {
   const handleSaveEdit = async () => {
     if (isSaving) return
     const currentCategoryId = (document.metadata?.category as string) || ''
-    const hasChanges = 
+    const hasChanges =
       editFilename !== document.original_filename ||
       editCategoryId !== currentCategoryId ||
       editProjectId !== document.project_id
@@ -221,194 +185,42 @@ export function DocumentRow({ document }: DocumentRowProps) {
     }
   }
 
-  // Icône de statut de processing (wrappée dans span pour le title)
-  const ProcessingIcon = () => {
-    switch (document.processing_status) {
-      case 'pending':
-        return (
-          <span title="En attente">
-            <Clock className="w-3.5 h-3.5 text-gray-400" />
-          </span>
-        )
-      case 'processing':
-        return (
-          <span title="En cours">
-            <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin" />
-          </span>
-        )
-      case 'completed':
-        return (
-          <span title="Traité">
-            <CheckCircle className="w-3.5 h-3.5 text-gray-600" />
-          </span>
-        )
-      case 'error':
-        return (
-          <span title={document.processing_error || 'Erreur'}>
-            <AlertCircle className="w-3.5 h-3.5 text-gray-600" />
-          </span>
-        )
-      default:
-        return null
-    }
-  }
-
-  // Mode édition
   if (isEditing) {
     return (
-      <tr className="bg-gray-50">
-        <td className="py-3 px-2">
-          <input
-            type="text"
-            value={editFilename}
-            onChange={(e) => setEditFilename(e.target.value)}
-            className="w-full px-2 py-1.5 text-sm bg-white border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-300 text-[#0B0F17]"
-          />
-        </td>
-        <td className="py-3 px-2">
-          <select
-            value={editProjectId || ''}
-            onChange={(e) => setEditProjectId(e.target.value || null)}
-            className="w-full px-1 py-1.5 text-xs bg-white border border-gray-300 rounded text-[#0B0F17]"
-          >
-            <option value="">Aucun</option>
-            {userProjects.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-        </td>
-        <td className="py-3 px-2">
-          <select
-            value={editCategoryId}
-            onChange={(e) => setEditCategoryId(e.target.value)}
-            className="w-full px-1 py-1.5 text-xs bg-white border border-gray-300 rounded text-[#0B0F17]"
-          >
-            <option value="">Aucune</option>
-            {availableCategories.map(c => (
-              <option key={c.id} value={c.id}>{c.label}</option>
-            ))}
-          </select>
-        </td>
-        <td className="py-3 text-right">
-          <div className="flex items-center justify-end gap-1">
-            <button
-              onClick={handleSaveEdit}
-              disabled={isSaving}
-              className="p-1.5 text-[#0B0F17] hover:bg-gray-100 rounded"
-            >
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            </button>
-            <button
-              onClick={resetForm}
-              disabled={isSaving}
-              className="p-1.5 text-gray-500 hover:bg-gray-100 rounded"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </td>
-      </tr>
+      <DocumentRowEdit
+        editFilename={editFilename}
+        editProjectId={editProjectId}
+        editCategoryId={editCategoryId}
+        isSaving={isSaving}
+        userProjects={userProjects}
+        availableCategories={availableCategories}
+        onFilenameChange={setEditFilename}
+        onProjectChange={setEditProjectId}
+        onCategoryChange={setEditCategoryId}
+        onSave={handleSaveEdit}
+        onCancel={resetForm}
+      />
     )
   }
 
-  // Mode affichage
   return (
-    <tr className="hover:bg-gray-50 transition group">
-      <td className="py-3 px-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-sm font-medium text-[#0B0F17] truncate">
-            {displayName}
-          </span>
-          <ProcessingIcon />
-          {promotionBadge && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-md flex-shrink-0 bg-gray-100 text-gray-700 border border-gray-200">
-              {promotionBadge.label}
-            </span>
-          )}
-        </div>
-        <div className="text-xs text-gray-500">
-          {formatFileSize(document.file_size)}
-          {document.chunk_count > 0 && ` • ${document.chunk_count} chunks`}
-        </div>
-      </td>
-      
-      <td className="py-3 px-2 text-xs text-gray-500 whitespace-nowrap">
-        {formattedDate}
-      </td>
-      
-      <td className="py-3 px-2">
-        {categoryConfig ? (
-          <div className="flex items-center gap-1 text-xs text-gray-500" title={categoryConfig.label}>
-            <span className="truncate">{categoryConfig.label}</span>
-          </div>
-        ) : (
-          <span className="text-xs text-gray-400">—</span>
-        )}
-      </td>
-      
-      <td className="py-3 text-right">
-        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          {/* Bouton Voir - ouvre le Split View */}
-          <button 
-            onClick={handleView} 
-            disabled={isLoadingUrl || !document.storage_path}
-            className="p-1.5 text-gray-500 hover:text-[#0B0F17] hover:bg-gray-100 rounded disabled:opacity-40 disabled:cursor-not-allowed" 
-            title="Voir"
-          >
-            {isLoadingUrl ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Eye className="w-4 h-4" />
-            )}
-          </button>
-          
-          {layerConfig.canDownload && (
-            <button 
-              onClick={handleDownload} 
-              disabled={!document.storage_path}
-              className="p-1.5 text-gray-500 hover:text-[#0B0F17] hover:bg-gray-100 rounded disabled:opacity-40 disabled:cursor-not-allowed" 
-              title="Télécharger"
-            >
-              <Download className="w-4 h-4" />
-            </button>
-          )}
-          
-          {/* v2.3.0: Bouton édition basé sur can_edit de la DB */}
-          {canEdit && (
-            <button 
-              onClick={() => setIsEditing(true)} 
-              className="p-1.5 text-gray-500 hover:text-[#0B0F17] hover:bg-gray-100 rounded" 
-              title="Modifier"
-            >
-              <Pencil className="w-4 h-4" />
-            </button>
-          )}
-          
-          {/* Bouton promotion (seulement layer user et statut draft) */}
-          {layerConfig.canPromote && document.promotion_status === 'draft' && (
-            <button 
-              onClick={handlePromote} 
-              disabled={isPromoting} 
-              className="p-1.5 text-gray-500 hover:text-[#0B0F17] hover:bg-gray-100 rounded" 
-              title="Proposer"
-            >
-              {isPromoting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-            </button>
-          )}
-          
-          {/* v2.3.0: Bouton suppression basé sur can_delete de la DB */}
-          {canDelete && (
-            <button 
-              onClick={handleDelete} 
-              disabled={isDeleting} 
-              className="p-1.5 text-gray-500 hover:text-[#0B0F17] hover:bg-gray-100 rounded" 
-              title="Supprimer"
-            >
-              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-            </button>
-          )}
-        </div>
-      </td>
-    </tr>
+    <DocumentRowView
+      document={document}
+      displayName={displayName}
+      formattedDate={formattedDate}
+      categoryLabel={categoryConfig?.label}
+      canDownload={layerConfig.canDownload}
+      canEdit={canEdit}
+      canPromote={layerConfig.canPromote}
+      canDelete={canDelete}
+      isLoadingUrl={isLoadingUrl}
+      isPromoting={isPromoting}
+      isDeleting={isDeleting}
+      onView={handleView}
+      onDownload={handleDownload}
+      onEdit={() => setIsEditing(true)}
+      onPromote={handlePromote}
+      onDelete={handleDelete}
+    />
   )
 }

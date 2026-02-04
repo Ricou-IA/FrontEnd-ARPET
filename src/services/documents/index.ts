@@ -42,6 +42,10 @@ export {
   getPendingPromotionsCount,
 } from './document-stats.service';
 
+// Cross-ref metadata
+export { getCrossRefMetadata } from './crossref-metadata.service';
+export type { CrossRefMetadata } from './crossref-metadata.service';
+
 // Projects
 export { getUserProjects } from './projects.service';
 

@@ -3,9 +3,10 @@
 // Affiche un message de l'assistant avec vote et sources
 // ============================================================
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { AlertCircle } from 'lucide-react'
-import type { Message } from '../../../types'
+import type { Message, ViewerDocument } from '../../../types'
+import { getSourceFileById, getFileDownloadUrl } from '../../../services/documents.service'
 import { useAuth } from '../../../hooks/useAuth'
 import { useAppStore } from '../../../stores/appStore'
 import * as voteService from '../../../services/vote.service'
@@ -13,8 +14,11 @@ import { RagBadge } from '../RagBadge'
 import { formatContent } from '../utils/format-content'
 import { KnowledgeHeader } from './KnowledgeHeader'
 import { SourcesList } from './SourcesList'
+import { CrossRefActions } from './CrossRefActions'
 import { CopyButton } from './CopyButton'
 import { VoteButtons } from './VoteButtons'
+
+type CrossRefActionItem = NonNullable<Message['cross_ref_actions']>[number]
 
 interface AssistantMessageProps {
   message: Message
@@ -22,6 +26,7 @@ interface AssistantMessageProps {
   projectId?: string | null
   activeProject?: { id: string; org_id: string } | null
   onVoteComplete?: (message: Message, voteType: 'up' | 'down', qaId?: string) => void
+  onCrossRefAction?: (action: CrossRefActionItem, originalMessage: Message) => void
 }
 
 export function AssistantMessage({
@@ -30,6 +35,7 @@ export function AssistantMessage({
   projectId,
   activeProject,
   onVoteComplete,
+  onCrossRefAction,
 }: AssistantMessageProps) {
   const { profile } = useAuth()
   const { openViewer } = useAppStore()
@@ -40,8 +46,68 @@ export function AssistantMessage({
   const [voteError, setVoteError] = useState<string | null>(null)
   const [localTrustScore, setLocalTrustScore] = useState(message.qa_memory_trust_score || 0)
 
+  // Ref pour délégation de clic sur citations inline
+  const contentRef = useRef<HTMLDivElement>(null)
+
   // Déterminer si le bouton down est actif
   const canVoteDown = Boolean(message.qa_memory_id)
+
+  /**
+   * Handler délégué pour les citations inline [Document, Page X]
+   * Intercepte les clics sur les <a class="source-citation"> générés par formatContent
+   */
+  const handleContentClick = useCallback(async (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement
+    const citation = target.closest('.source-citation') as HTMLAnchorElement | null
+    if (!citation) return
+
+    e.preventDefault()
+    e.stopPropagation()
+
+    const sourceName = citation.dataset.sourceName
+    const sourcePage = citation.dataset.sourcePage ? parseInt(citation.dataset.sourcePage, 10) : undefined
+
+    if (!sourceName) return
+
+    // Chercher la source correspondante dans les sources du message
+    const matchedSource = message.sources?.find(s => {
+      const name = s.document_name || s.name || ''
+      return name.toLowerCase().includes(sourceName.toLowerCase()) ||
+             sourceName.toLowerCase().includes(name.toLowerCase().replace(/\.[^.]+$/, ''))
+    })
+
+    const sourceFileId = matchedSource?.source_file_id
+    if (!sourceFileId) {
+      if (import.meta.env.DEV) {
+        console.warn('[AssistantMessage] Citation click: no source_file_id found for', sourceName)
+      }
+      return
+    }
+
+    // Ouvrir le document (même logique que SourceBadge)
+    try {
+      const { data: file, error: fileError } = await getSourceFileById(sourceFileId)
+      if (fileError || !file || !file.storage_path) return
+
+      const { data: url, error: urlError } = await getFileDownloadUrl(file.storage_bucket, file.storage_path)
+      if (urlError || !url) return
+
+      const viewerDoc: ViewerDocument = {
+        id: file.id,
+        filename: file.original_filename,
+        url,
+        mimeType: file.mime_type,
+        fileSize: file.file_size,
+        initialPage: sourcePage || matchedSource?.page || undefined,
+      }
+
+      openViewer(viewerDoc)
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.error('[AssistantMessage] Citation click error:', err)
+      }
+    }
+  }, [message.sources, openViewer])
 
   /**
    * Vote positif
@@ -182,16 +248,28 @@ export function AssistantMessage({
             />
           )}
 
-          {/* Contenu du message */}
+          {/* Contenu du message — les citations inline [Doc, Page X] sont cliquables */}
           <div
+            ref={contentRef}
+            onClick={handleContentClick}
             className="prose prose-sm prose-stone dark:prose-invert max-w-none font-serif"
             dangerouslySetInnerHTML={{ __html: formatContent(message.content) }}
           />
 
           <SourcesList
             sources={message.sources || []}
+            responseContent={message.content}
             onOpenViewer={openViewer}
           />
+
+          {/* Actions de croisement (Comparer, Conformité, Synthétiser) */}
+          {message.cross_ref_actions && message.cross_ref_actions.length > 0 && !message.isStreaming && (
+            <CrossRefActions
+              actions={message.cross_ref_actions}
+              onAction={(action) => onCrossRefAction?.(action, message)}
+              disabled={!onCrossRefAction}
+            />
+          )}
 
           {/* Erreur de vote */}
           {voteError && (

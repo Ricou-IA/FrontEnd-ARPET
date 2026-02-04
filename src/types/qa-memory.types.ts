@@ -10,7 +10,7 @@ export type AuthorityLabel = 'user' | 'team' | 'expert' | 'flagged';
 /**
  * Types de sources (v6 - avec qa_memory)
  */
-export type SourceType = 'document' | 'qa_memory';
+export type SourceType = 'document' | 'qa_memory' | 'meeting';
 
 /**
  * QA Memory entry

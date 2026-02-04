@@ -159,7 +159,7 @@ export async function processAudio(
     onStatusChange?.('uploading');
 
     // Convertir le Blob audio en base64
-    console.log('[MeetingService] Conversion audio en base64...');
+    if (import.meta.env.DEV) console.log('[MeetingService] Conversion audio en base64...');
     const audioBase64 = await blobToBase64(audioBlob);
 
     // Générer un nom de fichier
@@ -179,7 +179,7 @@ export async function processAudio(
       agenda: prepareData.agenda || undefined,
     };
 
-    console.log('[MeetingService] Envoi JSON à meeting-transcribe...', {
+    if (import.meta.env.DEV) console.log('[MeetingService] Envoi JSON à meeting-transcribe...', {
       title: prepareData.title,
       fileName,
       audioSize: audioBlob.size,
@@ -209,13 +209,13 @@ export async function processAudio(
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('[MeetingService] Edge Function error:', errorData);
+      if (import.meta.env.DEV) console.error('[MeetingService] Edge Function error:', errorData);
       onStatusChange?.('error');
       throw new Error(errorData.error || `Erreur ${response.status}`);
     }
 
     const data = await response.json();
-    console.log('[MeetingService] meeting-transcribe response:', data);
+    if (import.meta.env.DEV) console.log('[MeetingService] meeting-transcribe response:', data);
 
     onStatusChange?.('analyzing');
     await sleep(300);

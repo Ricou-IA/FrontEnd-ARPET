@@ -65,6 +65,46 @@ export function PdfViewer({
     return () => resizeObserver.disconnect()
   }, [updateContainerWidth])
 
+  /**
+   * Scroll direct vers une page par calcul de position.
+   * Contourne la virtualisation : positionne le scroll via la hauteur estimée,
+   * met à jour visiblePage pour recentrer le buffer de rendu,
+   * puis ajuste avec scrollIntoView une fois la page réellement rendue.
+   */
+  const scrollToPageDirect = useCallback((targetPage: number) => {
+    if (!containerRef.current) return
+
+    isScrollingProgrammatically.current = true
+
+    // Calculer la position estimée (hauteur page A4 + gap 16px + padding)
+    const pageHeight = containerRef.current.clientWidth
+      ? (containerRef.current.clientWidth - 32) * 1.414
+      : 800
+    const gap = 16 // gap-4 = 16px (Tailwind)
+    const paddingTop = 16 // py-4 = 16px
+    const estimatedOffset = paddingTop + (targetPage - 1) * (pageHeight + gap)
+
+    // 1. Scroll instantané vers la position estimée (déplace le viewport)
+    containerRef.current.scrollTop = estimatedOffset
+
+    // 2. Mettre à jour visiblePage → le buffer de rendu se recentre sur targetPage
+    setVisiblePage(targetPage)
+    lastCurrentPage.current = targetPage
+
+    // 3. Après le re-rendu (les pages autour de targetPage sont maintenant rendues),
+    //    ajuster avec scrollIntoView pour la précision pixel-perfect
+    setTimeout(() => {
+      const pageElement = pageRefs.current.get(targetPage)
+      if (pageElement) {
+        pageElement.scrollIntoView({ behavior: 'auto', block: 'start' })
+      }
+
+      setTimeout(() => {
+        isScrollingProgrammatically.current = false
+      }, 300)
+    }, 150)
+  }, [])
+
   // Observer quelle page est visible (pour mettre à jour l'indicateur)
   useEffect(() => {
     if (!containerRef.current || numPages === 0) return
@@ -106,31 +146,32 @@ export function PdfViewer({
     return () => observer.disconnect()
   }, [numPages, visiblePage, onPageChange])
 
-  // Scroll vers une page spécifique UNIQUEMENT quand on clique sur les boutons < >
-  // (c'est-à-dire quand currentPage change depuis l'extérieur)
+  // Scroll vers une page spécifique quand currentPage change depuis l'extérieur
+  // (boutons < > de la toolbar, ou setViewerPage depuis le store)
   useEffect(() => {
-    // Ne rien faire si c'est le même numéro de page
-    if (currentPage === lastCurrentPage.current) return
+    // Ne rien faire si c'est le même numéro de page ou si pas encore chargé
+    if (currentPage === lastCurrentPage.current || numPages === 0) return
 
-    // Mettre à jour la référence
-    lastCurrentPage.current = currentPage
-
-    // Scroll programmatique vers la page demandée
+    // Si la page est déjà rendue (dans le buffer), scroll smooth classique
     if (pageRefs.current.has(currentPage)) {
-      isScrollingProgrammatically.current = true
-
       const pageElement = pageRefs.current.get(currentPage)
-      pageElement?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      const isRendered = pageElement && pageElement.querySelector('canvas')
 
-      // Mettre à jour visiblePage immédiatement
-      setVisiblePage(currentPage)
-
-      // Reset le flag après l'animation de scroll
-      setTimeout(() => {
-        isScrollingProgrammatically.current = false
-      }, 500)
+      if (isRendered) {
+        isScrollingProgrammatically.current = true
+        lastCurrentPage.current = currentPage
+        pageElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        setVisiblePage(currentPage)
+        setTimeout(() => {
+          isScrollingProgrammatically.current = false
+        }, 500)
+        return
+      }
     }
-  }, [currentPage])
+
+    // Sinon (page hors buffer), utiliser le scroll direct par position
+    scrollToPageDirect(currentPage)
+  }, [currentPage, numPages, scrollToPageDirect])
 
   // Reset quand l'URL change
   useEffect(() => {
@@ -138,15 +179,22 @@ export function PdfViewer({
     setHasError(false)
     setNumPages(0)
     setVisiblePage(1)
-    lastCurrentPage.current = 1
+    // Ne pas forcer lastCurrentPage à 1 — le store peut déjà avoir initialPage > 1.
+    // On le reset à 0 pour que le useEffect de scroll détecte le changement au prochain rendu.
+    lastCurrentPage.current = 0
     pageRefs.current.clear()
   }, [url])
 
-  const handleLoadSuccess = ({ numPages }: { numPages: number }) => {
-    setNumPages(numPages)
+  const handleLoadSuccess = ({ numPages: loadedNumPages }: { numPages: number }) => {
+    setNumPages(loadedNumPages)
     setIsLoading(false)
     setHasError(false)
-    onLoadSuccess(numPages)
+    onLoadSuccess(loadedNumPages)
+
+    // Navigation initiale vers la page demandée si > 1 (ex: ouverture via citation)
+    if (currentPage > 1 && currentPage <= loadedNumPages) {
+      scrollToPageDirect(currentPage)
+    }
   }
 
   const handleLoadError = (error: Error) => {

@@ -12,7 +12,7 @@ import { MessageBubble } from '../components/chat/MessageBubble'
 import { ChatInput } from '../components/chat/ChatInput'
 import { SaveConversationModal } from '../components/chat/SaveConversationModal'
 import { StreamingBubble } from '../components/chat/StreamingBubble'
-import { sendMessageStream, type ChatResponse, type SSEStepEvent } from '../services/chat.service'
+import { sendMessageStream, type ChatResponse, type SSEStepEvent, type CrossRefAction } from '../services/chat.service'
 import type { Message, MessageSource } from '../types'
 
 // ============================================================
@@ -131,6 +131,7 @@ export function Dashboard() {
     let fullResponse = ''
     let receivedSources: MessageSource[] = []
     let receivedMetadata: Partial<ChatResponse> = {}
+    let receivedCrossRefActions: CrossRefAction[] = []
 
     try {
       abortControllerRef.current = await sendMessageStream(
@@ -170,6 +171,14 @@ export function Dashboard() {
               console.log('[Dashboard] Conversation ID reçu:', metadata.conversation_id)
               setCurrentConversationId(metadata.conversation_id)
             }
+          },
+
+          // Callback pour les actions cross-ref
+          onCrossRefActions: (actions) => {
+            if (import.meta.env.DEV) {
+              console.log('[Dashboard] Cross-ref actions reçues:', actions.length)
+            }
+            receivedCrossRefActions = actions
           },
 
           // Callback erreur
@@ -225,6 +234,8 @@ export function Dashboard() {
               },
 
               user_vote: null,
+
+              cross_ref_actions: receivedCrossRefActions.length > 0 ? receivedCrossRefActions : undefined,
             }
 
             addMessage(assistantMessage)
@@ -260,9 +271,121 @@ export function Dashboard() {
     console.log('[Dashboard] Vote complété:', { messageId: message.id, voteType, qaId })
   }
 
+  // Handler cross-ref : envoie une requête spécialisée avec le mode de croisement
+  const handleCrossRefAction = (action: CrossRefAction, originalMessage: Message) => {
+    if (isAgentTyping) return
+
+    const syntheticQuery = `${action.label} — ${action.documents.join(' / ')}`
+
+    if (import.meta.env.DEV) {
+      console.log('[Dashboard] Cross-ref action:', action.type, action.documents)
+    }
+
+    // Insérer un message utilisateur synthétique
+    const userMessage: Message = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: syntheticQuery,
+      timestamp: new Date(),
+    }
+    addMessage(userMessage)
+
+    // Reset états streaming
+    const assistantMessageId = crypto.randomUUID()
+    setStreamingContent('')
+    setCurrentSteps([])
+    setStepsComplete(false)
+    setIsAgentTyping(true)
+
+    const userId = profile?.id || null
+    const effectiveOrgId = activeProject?.org_id || profile?.org_id || null
+
+    let fullResponse = ''
+    let receivedSources: MessageSource[] = []
+    let receivedMetadata: Partial<ChatResponse> = {}
+
+    sendMessageStream(
+      {
+        query: syntheticQuery,
+        user_id: userId,
+        org_id: effectiveOrgId,
+        project_id: activeProject?.id || null,
+        conversation_id: currentConversationId,
+        cross_ref_mode: action.type,
+        detected_documents: action.documents,
+        cross_ref_context: originalMessage.content,
+      },
+      {
+        onStep: (step) => {
+          setCurrentSteps(prev => [...prev, step])
+          if (step.step === 'generating') {
+            setStepsComplete(true)
+          }
+        },
+        onToken: (token) => {
+          fullResponse += token
+          setStreamingContent(prev => prev + token)
+        },
+        onSources: (sources, metadata) => {
+          receivedSources = sources
+          receivedMetadata = metadata
+          if (metadata.conversation_id) {
+            setCurrentConversationId(metadata.conversation_id)
+          }
+        },
+        onError: (error) => {
+          console.error('[Dashboard] Erreur cross-ref streaming:', error)
+          addMessage({
+            id: assistantMessageId,
+            role: 'assistant',
+            content: 'Erreur lors de l\'analyse croisée. Veuillez réessayer.',
+            timestamp: new Date(),
+          })
+          setStreamingContent('')
+          setCurrentSteps([])
+          setStepsComplete(false)
+          setIsAgentTyping(false)
+        },
+        onComplete: () => {
+          addMessage({
+            id: assistantMessageId,
+            role: 'assistant',
+            content: fullResponse || 'Aucune réponse reçue.',
+            timestamp: new Date(),
+            knowledge_type: receivedMetadata.knowledge_type,
+            validation_count: receivedMetadata.validation_count || 0,
+            agent_source: receivedMetadata.agent_source,
+            sources: receivedSources.length > 0 ? receivedSources : undefined,
+            documents_found: receivedMetadata.documents_found,
+            processing_time_ms: receivedMetadata.processing_time_ms,
+            generation_mode: receivedMetadata.generation_mode,
+            generation_mode_ui: receivedMetadata.generation_mode_ui,
+            cache_status: receivedMetadata.cache_status,
+            can_vote: true,
+            vote_context: {
+              question: syntheticQuery,
+              answer: fullResponse,
+              source_ids: receivedSources
+                .map(s => s.id)
+                .filter((id): id is string => typeof id === 'string'),
+            },
+            user_vote: null,
+          })
+          setStreamingContent('')
+          setCurrentSteps([])
+          setStepsComplete(false)
+          setIsAgentTyping(false)
+          abortControllerRef.current = null
+        },
+      }
+    ).then(controller => {
+      abortControllerRef.current = controller
+    })
+  }
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* Header - v6.2.1: Compact */}
+      {/* Header */}
       <header className="sticky top-0 z-30 px-8 py-4 flex-shrink-0 bg-transparent border-b-0">
         <h1 className="font-serif text-4xl font-normal text-[#0B0F17] dark:text-stone-100 max-w-3xl">
           Bonjour {userName},
@@ -288,6 +411,7 @@ export function Dashboard() {
                 projectId={activeProject?.id}
                 activeProject={activeProject}
                 onVoteComplete={handleVoteComplete}
+                onCrossRefAction={handleCrossRefAction}
               />
             )
           })}

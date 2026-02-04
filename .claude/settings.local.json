@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(git fetch:*)",
+      "Bash(git checkout:*)",
+      "Bash(Remove-Item .git/index.lock -Force)",
+      "Bash(npm run build:*)",
+      "Bash(find:*)",
+      "Bash(test:*)",
+      "Bash(while read f)",
+      "Bash(do if ! grep -l \"export.*from\\\\|import\" \"$f\")",
+      "Bash(then echo \"$f\" fi done)",
+      "Bash(wc:*)",
+      "mcp__supabase__list_edge_functions",
+      "mcp__supabase__get_edge_function",
+      "Bash(ls:*)",
+      "Bash(powershell -Command \"Get-Content ''C:\\\\Users\\\\epude\\\\.claude\\\\projects\\\\C--Users-epude-OneDrive-Documents-test-Frontend-ARPET\\\\4abbf2d4-2952-4fd6-92a0-0c7c64b851c6\\\\tool-results\\\\mcp-supabase-get_edge_function-1770016045720.txt'' | ConvertFrom-Json | Select-Object -Property @{Name=''Slug'';Expression={$_files[0].content.Split\\(''//''\\)[1..3] -join ''''}}, id | head -5\")",
+      "mcp__supabase__deploy_edge_function",
+      "mcp__supabase__get_logs",
+      "mcp__supabase__search_docs",
+      "mcp__supabase__execute_sql",
+      "mcp__supabase__apply_migration",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__get_advisors",
+      "Bash(powershell -Command \"Get-Content ''C:\\\\Users\\\\epude\\\\.claude\\\\projects\\\\C--Users-epude-OneDrive-Documents-test-Frontend-ARPET\\\\c5c1db12-7c80-4263-9ea5-d5209643746a\\\\tool-results\\\\mcp-00c6d79b-3619-4e5d-8c97-fe0556c77542-get_workflow_details-1770078796381.txt'' -Raw | ConvertFrom-Json | ConvertTo-Json -Depth 1\")",
+      "Bash(powershell -Command \"$raw = Get-Content ''C:\\\\Users\\\\epude\\\\.claude\\\\projects\\\\C--Users-epude-OneDrive-Documents-test-Frontend-ARPET\\\\c5c1db12-7c80-4263-9ea5-d5209643746a\\\\tool-results\\\\mcp-00c6d79b-3619-4e5d-8c97-fe0556c77542-get_workflow_details-1770078796381.txt'' -Raw; $json = $raw | ConvertFrom-Json; $workflow = $json.value[0].text | ConvertFrom-Json; Write-Host ''Workflow name:'' $workflow.workflow.name; Write-Host ''''; Write-Host ''=== CONNECTIONS ===''; $connections = $workflow.workflow.connections; $connections | ConvertTo-Json -Depth 10\")",
+      "Bash(powershell -Command \"$raw = Get-Content ''C:\\\\Users\\\\epude\\\\.claude\\\\projects\\\\C--Users-epude-OneDrive-Documents-test-Frontend-ARPET\\\\c5c1db12-7c80-4263-9ea5-d5209643746a\\\\tool-results\\\\mcp-00c6d79b-3619-4e5d-8c97-fe0556c77542-get_workflow_details-1770078796381.txt'' -Raw; $json = $raw | ConvertFrom-Json; $wfText = $json.value[0].text; $wf = $wfText | ConvertFrom-Json; $conn = $wf.workflow.connections; $conn | ConvertTo-Json -Depth 10\")",
+      "Bash(powershell -ExecutionPolicy Bypass -File:*)",
+      "Bash(del \"C:\\\\Users\\\\epude\\\\OneDrive\\\\Documents\\\\test\\\\Frontend-ARPET\\\\parse_workflow.ps1\" \"C:\\\\Users\\\\epude\\\\OneDrive\\\\Documents\\\\test\\\\Frontend-ARPET\\\\parse_workflow2.ps1\" \"C:\\\\Users\\\\epude\\\\OneDrive\\\\Documents\\\\test\\\\Frontend-ARPET\\\\parse_workflow3.ps1\" \"C:\\\\Users\\\\epude\\\\OneDrive\\\\Documents\\\\test\\\\Frontend-ARPET\\\\parse_workflow4.ps1\" \"C:\\\\Users\\\\epude\\\\OneDrive\\\\Documents\\\\test\\\\Frontend-ARPET\\\\parse_workflow5.ps1\")",
+      "Bash(powershell -Command:*)",
+      "Bash(timeout:*)",
+      "Bash(ping:*)",
+      "Bash(npx vite --host)"
+    ]
+  }
+}
