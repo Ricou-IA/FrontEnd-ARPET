@@ -14,6 +14,7 @@ import { Login } from './pages/Login'
 import { Dashboard } from './pages/Dashboard'
 import { Documents } from './pages/Documents'
 import { Settings } from './pages/Settings'
+import { Reunions } from './pages/Reunions'
 
 // ============================================================
 // LOADING SCREEN
@@ -120,6 +121,7 @@ function App() {
           >
             <Route index element={<Dashboard />} />
             <Route path="documents" element={<Documents />} />
+            <Route path="reunions" element={<Reunions />} />
             <Route path="settings" element={<Settings />} />
           </Route>
 

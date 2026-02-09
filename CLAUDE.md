@@ -1,7 +1,7 @@
 # CLAUDE.md — Projet ARPET (FrontEnd)
 
 > Ce fichier est lu automatiquement par Claude Code à chaque session.
-> Dernière mise à jour : 2026-02-03
+> Dernière mise à jour : 2026-02-07
 
 ## 🏗️ Contexte Projet
 
@@ -136,10 +136,10 @@ git push origin master    # Auto-deploy Vercel
 
 ## 📋 Modules & Specs Détaillées
 
-| Module | Fichier spec | Statut |
+| Module | Fichier spec / doc | Statut |
 |--------|-------------|--------|
-| Meeting V2 (Gladia + Recall) | `docs/SPEC_MEETING_V2.md` | 🔨 En développement |
-| Cross-Référencement Documents | `docs/SPEC_CROSS_REF_V1.md` | 🔨 P1+P2 implémentés |
+| **Meeting V3** (Gladia + Recall + RAG) | `docs/SPEC_MEETING_V3.md` + `docs/DOC_MODULE_MEETING_V3.md` | ✅ Phases 1-7 terminées, Phase 8 (E2E) en cours |
+| Cross-Référencement Documents | `docs/SPEC_CROSS_REF_V1.md` | 🔨 P1+P2+P3 implémentés |
 | Email Gateway (Inbound) | À créer | 📋 Spécifié |
 | BAIKAL Brain V3 | Voir project knowledge | 📋 Spécifié |
 
@@ -215,11 +215,94 @@ git push origin master    # Auto-deploy Vercel
 
 ## 📌 État Courant
 
-**Date** : 2026-02-03
+**Date** : 2026-02-07
 **Branche** : `refactor/technical-debt`
 **Statut build** : ✅ OK
 **Dernier commit** : `4f4ee00` — refactor: split large files into modular structure (non poussé)
-**Modifications non commitées** : UX Sources Chat + Cross-Ref P1/P2 (~15 fichiers modifiés)
+**Modifications non commitées** : UX Sources Chat + Cross-Ref P1/P2/P3 + Meeting V3 phases 1-7 (~45 fichiers modifiés)
+
+---
+
+## 🎙️ Meeting V3 — ✅ TERMINÉ (Phases 1-7)
+
+> Documentation complète : `docs/DOC_MODULE_MEETING_V3.md`
+> Spec originale : `docs/SPEC_MEETING_V3.md`
+
+| Phase | Description | Statut |
+|-------|-------------|--------|
+| 1/8 | DB + Types + Services de base | ✅ |
+| 2/8 | Capture Frontend (upload, mémo, modal refonte) | ✅ |
+| 3/8 | Edge Functions Transcription + Extraction | ✅ |
+| 4/8 | Speaker Mapping + Review UI | ✅ |
+| 5/8 | Ingestion RAG (chunking + embedding) | ✅ (dans meeting-extract/vectorize.ts) |
+| 6/8 | Historique + Vue Actions (dashboard) | ✅ |
+| 7/8 | Documents Générés (UI + Edge Function + Preview) | ✅ |
+| 8/8 | Tests End-to-End + Stabilisation | 🔜 Prochain |
+
+**Bilan** : 24 fichiers créés, 11 modifiés, 3 Edge Functions, 5 migrations, 1 dépendance (`html2pdf.js`)
+
+### Audit RLS général — ✅ TERMINÉ (session 2026-02-07)
+
+**Périmètre** : 23 tables (core + arpet + rag), 6 buckets Storage, 63+ policies
+**Résultat** : 4 critiques + 7 importants + 5 mineurs identifiés et corrigés
+
+**Migrations appliquées (7) :**
+
+| Migration | Sprint | Résumé |
+|---|---|---|
+| `rls_fix_c1_project_tasks_scope_policies` | S1 | `project_tasks` : drop 2 policies `true`, 5 policies scoped |
+| `rls_fix_c2_project_recordings_private` | S1 | Bucket `public:false`, 500MB, MIME audio, 3 policies scoped org |
+| `rls_fix_c3_meetings_remove_legacy_policies` | S1 | Drop 4 policies legacy meetings (garder V2) |
+| `rls_fix_c4_organization_members_restrict_select` | S1 | SELECT restreint same org + super_admin |
+| `rls_fix_sprint2_core_and_rag` | S2 | project_members org_admin, intervenants UPDATE+service_role, gemini_caches RLS ON, documents INSERT scoped |
+| `rls_fix_sprint2_storage` | S2 | Drop Dev Allow All, premium-sources scoped org |
+| `rls_fix_sprint3_cleanup_duplicates` | S3 | Drop doublons RAG, meeting_items V2, project_members scoped, orgs/profiles INSERT service_role |
+
+**Note** : le bucket `snapstudio` (public) est hors périmètre ARPET (autre projet, même DB Supabase)
+
+### Évolution spécifiée : Enrichissement RAG Mémo Chantier (session 2026-02-07)
+
+**Spec** : `docs/PROMPTS_MEETING_GENERATE_DOC.md` (v2)
+
+**Décision** : enrichissement RAG **à la volée** (pas à l'ingestion du transcript)
+- Chaque item (decision/action/issue) est enrichi avec les pièces marché via `match_documents_v14`
+- Batch embed (1 appel OpenAI) + recherches parallèles (`Promise.all`)
+- Résultat : champ `rag_context[]` in-memory (pas stocké en DB) → injecté dans le prompt GPT-4o
+- Le Markdown généré inclut les références contractuelles (`📄 Réf. : CCTP TCE, p.56`)
+- **Aucun changement frontend** — l'enrichissement est côté EF uniquement
+- Surcoût estimé : +2-5s sur la génération (budget total ~15-25s, dans le timeout 60s)
+
+**Raison du choix "à la volée" vs "à l'ingestion"** :
+- Liens figés en DB deviendraient invalides si CCTP ré-ingéré
+- CCTP ingéré après transcript → lien jamais créé
+- Mauvais match → erreur permanente sans self-healing
+
+### Ce qui a été fait (session 2026-02-07 — Doc Meeting V3 + Audit RLS général)
+
+- **Documentation Module Meeting V3** (`docs/DOC_MODULE_MEETING_V3.md`) :
+  - Audit complet : 13 composants, 4 services, 3 fichiers types, 14 intégrations, 4 tables DB
+  - 6 flux utilisateur documentés, inventaire : 24 fichiers créés, 11 modifiés
+
+- **Audit RLS général** (3 sprints, 7 migrations) :
+  - **Sprint 1 (critiques)** : `project_tasks` faille totale corrigée, `project-recordings` passé en privé (500MB, MIME audio), `meetings` 4 policies legacy supprimées, `organization_members` SELECT restreint
+  - **Sprint 2 (importants)** : `project_members` org_admin ajouté, `projet_intervenants` UPDATE ajouté, `intervenants` service_role ajouté, `gemini_caches` RLS activé, `rag.documents` INSERT scoped, Dev Allow All supprimées, `premium-sources` scoped org
+  - **Sprint 3 (nettoyage)** : doublons SELECT supprimés (citations, document_concepts, document_tables, organizations), `meeting_items` migré V2, `project_members` SELECT scoped, `orgs`/`profiles` INSERT restreint service_role
+
+### Ce qui a été fait (session 2026-02-07 — Phase 7 Documents Générés)
+
+- **Phase 7/8 — Documents Générés** (10 fichiers : 5 créés, 5 modifiés, 1 migration)
+- **Bugs corrigés** : EF slug mismatch, body field names, RLS Storage, getProjectLots crash 403, preview auto
+
+### Ce qui a été fait (session 2026-02-05 — Cross-Référencement P3 Wizard)
+
+- **Cross-Ref P3 — Wizard Cross-Ref** (5 fichiers : 2 créés, 3 modifiés) :
+  1. **`crossref-metadata.service.ts`** (nouveau) — service `getCrossRefMetadata(projectId)` : query lots (`qui_lots`) et normes (`comment_normes`) distincts des chunks RAG du projet, normalisation title case + dedup, retourne `{ lots, norms, documents }`
+  2. **`CrossRefWizard.tsx`** (nouveau) — panneau popover 3 étapes : Sujet (texte libre + chips normes cliquables) → Lot (sélection parmi lots indexés, skip auto si aucun) → Mode d'analyse (compare/compliance/synthesize avec aperçu question générée)
+  3. **`ChatInput.tsx`** (modifié) — bouton `Layers` (indigo) dans la barre d'actions, nouvelles props `onWizardSubmit` + `projectId`, rendu conditionnel du wizard, wrapper `relative` pour positionnement popover
+  4. **`Dashboard.tsx`** (modifié) — handler `handleWizardSubmit` (même pattern que `handleCrossRefAction` : message synthétique + `sendMessageStream` avec `cross_ref_mode`/`detected_documents` + capture `onCrossRefActions` pour enchaînement P2)
+  5. **`documents/index.ts`** (modifié) — barrel export `getCrossRefMetadata` + type `CrossRefMetadata`
+
+- Nettoyage session précédente : toggle A/B supprimé, `BackendToggle.tsx` et `TestCrossRef.tsx` supprimés, `chat-config.ts` figé sur `baikal-retrieval`
 
 ### Ce qui a été fait (session 2026-02-03 — Cross-Référencement P1+P2)
 
@@ -348,7 +431,7 @@ Spec complète : `docs/SPEC_CROSS_REF_V1.md`
 | **Frontend SSE** | ✅ P1 | `mapCrossRefAnalysis()`, handler `onCrossRefActions`, envoi `cross_ref_mode`/`cross_ref_context` |
 | **Frontend UI actions** | ✅ P2 | `CrossRefActions.tsx`, intégré dans `AssistantMessage`, handler dans `Dashboard` |
 | **Frontend tableaux** | ✅ P2 | `formatTables()` dans `format-content.ts` |
-| **Frontend Wizard** | ❌ P3 | `CrossRefWizard.tsx` — pas encore implémenté |
+| **Frontend Wizard** | ✅ P3 | `CrossRefWizard.tsx` + `crossref-metadata.service.ts` + intégration `ChatInput`/`Dashboard` |
 | **DB DTU Mapping** | ❌ P4 | `rag.dtu_lot_mapping` — pas encore créée |
 | **DTU ingérés** | ❌ Bloquant | Aucun DTU dans l'app layer → test cross-ref dual-scope impossible pour l'instant |
 
@@ -368,33 +451,33 @@ Spec complète : `docs/SPEC_CROSS_REF_V1.md`
 | `src/components/chat/MessageBubble.tsx` | P2 | Pass-through `onCrossRefAction` |
 | `src/pages/Dashboard.tsx` | P2 | Capture SSE, stockage, handler `handleCrossRefAction` |
 | `src/components/chat/utils/format-content.ts` | P2 | `formatTables()` — rendu tableaux markdown |
+| `src/services/documents/crossref-metadata.service.ts` | P3 | **Nouveau** — `getCrossRefMetadata()` : lots/normes/documents du projet |
+| `src/services/documents/index.ts` | P3 | Barrel export `getCrossRefMetadata` + type `CrossRefMetadata` |
+| `src/components/chat/CrossRefWizard.tsx` | P3 | **Nouveau** — wizard 3 étapes (sujet → lot → mode), popover au-dessus du ChatInput |
+| `src/components/chat/ChatInput.tsx` | P3 | Bouton `Layers`, props `onWizardSubmit`/`projectId`, rendu wizard |
+| `src/pages/Dashboard.tsx` | P3 | Handler `handleWizardSubmit`, props ChatInput enrichies |
 
 **Prochaines étapes cross-ref :**
 
 1. **Ingérer au moins 1 DTU** (ex: DTU 25.41 plâtrerie) dans l'app layer pour tester le dual-scope
 2. **Test end-to-end** avec une question type "Le CCTP mentionne le DTU 25.41, quelles incidences ?"
 3. **Mettre à jour les tests** avec les résultats réels (détection, actions, réponse croisée)
-4. **P3 — Wizard** : `CrossRefWizard.tsx` + intégration `ChatInput.tsx`
+4. **Améliorer le Wizard P3** : UX à affiner après premiers retours terrain (sélection document spécifique, suggestions contextuelles, etc.)
 5. **P4 — DTU Mapping** : table `rag.dtu_lot_mapping` + seed data
 
 **Tâches en attente (non cross-ref) :**
 
-1. **Retirer le toggle A/B** du Dashboard avant merge
-   - Supprimer `BackendToggle.tsx` du Dashboard
-   - Retrieval v1.4.0 est validé comme endpoint principal
-   - Optionnel : nettoyer `useChatConfig` si plus utilisé
-
-2. **Merge branche `refactor/technical-debt`** → `master` (ARPET)
-   - Vérifier que le toggle A/B est retiré
+1. **Merge branche `refactor/technical-debt`** → `master` (ARPET)
+   - Toggle A/B déjà retiré ✅
    - Build + validation preview Vercel
    - Push vers GitHub
 
-3. **Cohere reranking** (futur)
+2. **Cohere reranking** (futur)
    - `search/reranker.ts` existe mais est désactivé (`features.reranking_enabled = false`)
    - Pourrait améliorer la précision du ranking, surtout pour les requêtes ambiguës
    - Nécessite clé API Cohere + coût additionnel par requête
 
-4. **Ré-ingestion globale** avec pipeline v5.1.0
+3. **Ré-ingestion globale** avec pipeline v5.1.0
    - Seul le CCTP a été ré-ingéré, les autres documents sont encore en v5.0.0
    - Prioriser les documents les plus consultés
 
@@ -420,7 +503,7 @@ Spec complète : `docs/SPEC_CROSS_REF_V1.md`
 - `match_documents_v14` branchée dans retrieval et déployée en prod
 - Les Edge Functions se modifient dans le repo Baikal, l'utilisateur déploie
 - Pipeline ingestion FLUX 3-v2 (2 passes) validé sur CCTP — prêt pour ré-ingestion globale
-- Toggle A/B à retirer avant merge vers master
+- Toggle A/B retiré ✅ (`BackendToggle.tsx` supprimé, `chat-config.ts` figé sur `baikal-retrieval`)
 
 ### Résultats A/B Testing v1.4.0 vs v1.3.0 (session 2026-02-03)
 

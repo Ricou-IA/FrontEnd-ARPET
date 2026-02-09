@@ -110,16 +110,21 @@ export async function getFileById(id: string): Promise<ServiceResult<SourceFile>
 }
 
 /**
- * Récupère l'URL de téléchargement d'un fichier
+ * Récupère l'URL de téléchargement d'un fichier.
+ * @param forceDownload - Si true, ajoute Content-Disposition: attachment
+ *   pour forcer le telechargement (utile pour .md, .txt que le navigateur ouvre inline)
  */
 export async function getFileDownloadUrl(
   bucket: string,
-  path: string
+  path: string,
+  forceDownload?: boolean
 ): Promise<ServiceResult<string>> {
   try {
     const { data, error } = await supabase.storage
       .from(bucket)
-      .createSignedUrl(path, 3600); // 1 heure
+      .createSignedUrl(path, 3600, {
+        download: forceDownload || false,
+      }); // 1 heure
 
     if (error) throw error;
 

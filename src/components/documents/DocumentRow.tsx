@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react'
 import { useAppStore } from '@/stores/appStore'
 import { LAYER_CONFIG, type SourceFile, type ViewerDocument } from '@/types'
 import { getFileDownloadUrl } from '@/services/documents.service'
+import { downloadAsPdf } from '@/services/meeting-documents.service'
 import { DocumentRowView } from './document-row/DocumentRowView'
 import { DocumentRowEdit } from './document-row/DocumentRowEdit'
 
@@ -116,9 +117,24 @@ export function DocumentRow({ document }: DocumentRowProps) {
     if (!document.storage_path) return
 
     try {
+      // Fichiers .md : export PDF a la volee
+      const isMarkdown = document.original_filename.toLowerCase().endsWith('.md')
+        || document.mime_type === 'text/markdown'
+
+      if (isMarkdown) {
+        await downloadAsPdf(
+          document.storage_bucket,
+          document.storage_path,
+          document.original_filename,
+        )
+        return
+      }
+
+      // Autres fichiers : telechargement classique
       const { data: url, error } = await getFileDownloadUrl(
         document.storage_bucket,
-        document.storage_path
+        document.storage_path,
+        true // forceDownload: Content-Disposition attachment
       )
 
       if (error || !url) {

@@ -28,7 +28,7 @@ export interface DocumentSlice {
     fetchDocuments: (layer?: DocumentLayer) => Promise<void>
     fetchDocumentsCounts: () => Promise<void>
     fetchDocumentCategories: (layer?: DocumentLayer) => Promise<void>
-    uploadDocument: (file: File, categoryId?: string, description?: string) => Promise<SourceFile | null>
+    uploadDocument: (file: File, categoryId?: string, description?: string, layer?: DocumentLayer) => Promise<SourceFile | null>
     updateDocument: (id: string, updates: { filename?: string; categoryId?: string; description?: string; projectId?: string | null }) => Promise<SourceFile | null>
     deleteDocument: (id: string) => Promise<boolean>
     requestDocumentPromotion: (id: string, comment?: string) => Promise<SourceFile | null>
@@ -146,9 +146,10 @@ export const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> 
         }
     },
 
-    uploadDocument: async (file, categoryId, description) => {
+    uploadDocument: async (file, categoryId, description, layer) => {
         set({ documentsError: null })
-        console.log('📤 Uploading document:', file.name)
+        const targetLayer = layer || 'user'
+        console.log('📤 Uploading document:', file.name, 'layer:', targetLayer)
 
         try {
             const state = get()
@@ -157,27 +158,28 @@ export const createDocumentSlice: StateCreator<AppState, [], [], DocumentSlice> 
                 categoryId,
                 description,
                 projectId: state.activeProject?.id,
+                layer: targetLayer,
             })
 
             if (error) throw error
 
             if (data) {
-                // Si on est sur la couche 'user', ajouter au state
-                if (state.documentsActiveLayer === 'user') {
+                // Ajouter au state si on est sur la couche cible
+                if (state.documentsActiveLayer === targetLayer) {
                     set((s) => ({
                         documents: [data, ...s.documents]
                     }))
                 }
 
-                // Mettre à jour les counts
+                // Mettre à jour le count du layer cible
                 set((s) => ({
                     documentsCounts: {
                         ...s.documentsCounts,
-                        user: s.documentsCounts.user + 1
+                        [targetLayer]: s.documentsCounts[targetLayer] + 1
                     }
                 }))
 
-                console.log('✅ Document uploaded:', data.id)
+                console.log('✅ Document uploaded:', data.id, 'layer:', targetLayer)
                 return data
             }
 

@@ -2,7 +2,7 @@
 // ARPET - Sidebar Navigation Section
 // ============================================================
 
-import { MessageSquare, FolderOpen, HardDrive, Video } from 'lucide-react'
+import { MessageSquare, FolderOpen, ClipboardList, HardDrive, Video } from 'lucide-react'
 import { NavItem } from './NavItem'
 
 interface SidebarNavigationProps {
@@ -16,6 +16,7 @@ interface SidebarNavigationProps {
 const routes = {
   chat: '/app',
   documents: '/app/documents',
+  reunions: '/app/reunions',
 }
 
 export function SidebarNavigation({ expanded, activeRoute, onNavigate, onOpenConnectors, onOpenMeeting }: SidebarNavigationProps) {
@@ -46,6 +47,14 @@ export function SidebarNavigation({ expanded, activeRoute, onNavigate, onOpenCon
       />
 
       <NavItem
+        icon={<ClipboardList className="w-[18px] h-[18px]" />}
+        label="Reunions"
+        isActive={isActive(routes.reunions)}
+        expanded={expanded}
+        onClick={() => onNavigate(routes.reunions)}
+      />
+
+      <NavItem
         icon={<HardDrive className="w-[18px] h-[18px]" />}
         label="Connecteurs"
         isActive={false}
@@ -55,7 +64,7 @@ export function SidebarNavigation({ expanded, activeRoute, onNavigate, onOpenCon
 
       <NavItem
         icon={<Video className="w-[18px] h-[18px]" />}
-        label="Réunion"
+        label="Enregistrer"
         isActive={false}
         expanded={expanded}
         onClick={onOpenMeeting}

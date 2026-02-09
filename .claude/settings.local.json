@@ -31,7 +31,12 @@
       "Bash(powershell -Command:*)",
       "Bash(timeout:*)",
       "Bash(ping:*)",
-      "Bash(npx vite --host)"
+      "Bash(npx vite --host)",
+      "Bash(git log:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm install:*)",
+      "Bash(node:*)",
+      "mcp__supabase__list_migrations"
     ]
   }
 }

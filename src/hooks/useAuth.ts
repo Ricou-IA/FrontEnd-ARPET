@@ -7,6 +7,7 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase, getProfile } from '../lib/supabase'
+import { resetAppStore } from '../stores/appStore'
 import type { Profile } from '../types'
 
 // ============================================================
@@ -55,6 +56,8 @@ function initAuth() {
     console.log('[AuthStore] Event:', event)
 
     if (!session) {
+      // Logout : nettoyer tout le state applicatif
+      resetAppStore()
       setAuthState({
         user: null,
         profile: null,
@@ -62,6 +65,13 @@ function initAuth() {
         isLoading: false,
       })
       return
+    }
+
+    // Changement d'utilisateur (login d'un autre user sans logout explicite)
+    const previousUserId = authState.user?.id
+    if (previousUserId && previousUserId !== session.user.id) {
+      console.log('[AuthStore] User changed, resetting app state')
+      resetAppStore()
     }
 
     // Session présente

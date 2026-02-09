@@ -1,19 +1,19 @@
 // ============================================================
 // ARPET - DocumentsPage Component
-// Version: 2.2.1 - Fix z-index header pour modales
-// Date: 2025-01-04
-//
-// MODIFICATIONS v2.2.1:
-// - z-50 → z-10 sur le header pour éviter de passer au-dessus des modales
+// Version: 2.4.0 - GenerateDocZone deplace vers ReunionsPage
+// Date: 2026-02-07
 // ============================================================
 
 import { useEffect, useState, useMemo } from 'react'
 import { Search, RefreshCw, Upload } from 'lucide-react'
 import { useAppStore } from '@/stores/appStore'
+import { useAuth } from '@/hooks/useAuth'
 import { LAYER_CONFIG } from '@/types'
 import { DocumentsTabs } from './DocumentsTabs'
 import { DocumentsList } from './DocumentsList'
 import { ImportDocumentModal } from './ImportDocumentModal'
+
+const PROJECT_UPLOAD_ROLES = ['team_leader', 'org_admin', 'super_admin']
 
 export function DocumentsPage() {
   const {
@@ -32,10 +32,16 @@ export function DocumentsPage() {
     clearDocumentsError,
   } = useAppStore()
 
+  const { profile } = useAuth()
   const [searchQuery, setSearchQuery] = useState('')
   const [isImportModalOpen, setIsImportModalOpen] = useState(false)
 
   const layerConfig = LAYER_CONFIG[documentsActiveLayer]
+
+  // L'upload sur le layer project nécessite un rôle team_leader/org_admin/super_admin
+  const canUploadOnCurrentLayer = layerConfig.canUpload && (
+    documentsActiveLayer !== 'project' || PROJECT_UPLOAD_ROLES.includes(profile?.app_role || '')
+  )
 
   // Charger les documents, counts et catégories au montage
   useEffect(() => {
@@ -108,7 +114,7 @@ export function DocumentsPage() {
               <RefreshCw className={`w-4 h-4 ${(documentsLoading || categoriesLoading) ? 'animate-spin' : ''}`} />
             </button>
 
-            {layerConfig.canUpload && (
+            {canUploadOnCurrentLayer && (
               <button
                 onClick={() => setIsImportModalOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-gradient-to-b from-gray-800 to-black text-white rounded-lg border-t border-gray-700 shadow-lg shadow-black/20 hover:from-gray-700 hover:to-gray-900 transition text-sm font-medium"
@@ -220,7 +226,7 @@ export function DocumentsPage() {
                   ? `Aucun document de type "${activeCategoryConfig?.label || 'sélectionné'}"`
                   : `Aucun document dans ${layerConfig.labelPlural}`
             }
-            onImportClick={layerConfig.canUpload ? () => setIsImportModalOpen(true) : undefined}
+            onImportClick={canUploadOnCurrentLayer ? () => setIsImportModalOpen(true) : undefined}
           />
         </div>
       </div>
@@ -228,6 +234,7 @@ export function DocumentsPage() {
       <ImportDocumentModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
+        targetLayer={documentsActiveLayer}
       />
     </div>
   )

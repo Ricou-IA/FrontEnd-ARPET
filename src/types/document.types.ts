@@ -186,7 +186,7 @@ export const LAYER_CONFIG: Record<DocumentLayer, {
     color: 'text-blue-700',
     bgColor: 'bg-blue-50',
     borderColor: 'border-blue-200',
-    canUpload: false,
+    canUpload: true,
     canDelete: false,
     canPromote: false,
     canDownload: true,

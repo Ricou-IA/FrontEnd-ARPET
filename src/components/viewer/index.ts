@@ -7,4 +7,5 @@
 export { SplitViewPanel } from './SplitViewPanel'
 export { PdfViewer } from './PdfViewer'
 export { ImageViewer } from './ImageViewer'
+export { MarkdownViewer } from './MarkdownViewer'
 export { ViewerToolbar } from './ViewerToolbar'

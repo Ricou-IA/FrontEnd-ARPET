@@ -8,10 +8,12 @@ import { useState, useRef, useEffect } from 'react'
 import { X, Upload, FileText, Loader2 } from 'lucide-react'
 import { useAppStore } from '@/stores/appStore'
 import { isEmojiIcon } from '@/types'
+import type { DocumentLayer } from '@/types'
 
 interface ImportDocumentModalProps {
   isOpen: boolean
   onClose: () => void
+  targetLayer?: DocumentLayer
 }
 
 // Types de fichiers acceptés
@@ -28,12 +30,12 @@ const ACCEPTED_TYPES = [
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50 Mo
 
-export function ImportDocumentModal({ isOpen, onClose }: ImportDocumentModalProps) {
-  const { 
-    uploadDocument, 
+export function ImportDocumentModal({ isOpen, onClose, targetLayer = 'user' }: ImportDocumentModalProps) {
+  const {
+    uploadDocument,
     documentsLoading,
     availableCategories,
-    fetchDocumentCategories 
+    fetchDocumentCategories
   } = useAppStore()
 
   const [file, setFile] = useState<File | null>(null)
@@ -46,16 +48,16 @@ export function ImportDocumentModal({ isOpen, onClose }: ImportDocumentModalProp
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Charger les catégories au montage si pas déjà chargées
+  // Charger les catégories au montage pour le layer cible
   useEffect(() => {
-    if (isOpen && availableCategories.length === 0) {
-      fetchDocumentCategories('user')
+    if (isOpen) {
+      fetchDocumentCategories(targetLayer)
     }
-  }, [isOpen, availableCategories.length, fetchDocumentCategories])
+  }, [isOpen, targetLayer, fetchDocumentCategories])
 
-  // Filtrer les catégories pour la couche 'user'
-  const userCategories = availableCategories.filter(cat => 
-    cat.target_layers?.includes('user')
+  // Filtrer les catégories pour le layer cible
+  const layerCategories = availableCategories.filter(cat =>
+    cat.target_layers?.includes(targetLayer)
   )
 
   // Reset form quand on ferme
@@ -116,9 +118,10 @@ export function ImportDocumentModal({ isOpen, onClose }: ImportDocumentModalProp
 
     try {
       const result = await uploadDocument(
-        file, 
-        categoryId || undefined, // UUID ou undefined
-        description || undefined
+        file,
+        categoryId || undefined,
+        description || undefined,
+        targetLayer
       )
       
       if (result) {
@@ -238,7 +241,7 @@ export function ImportDocumentModal({ isOpen, onClose }: ImportDocumentModalProp
               className="w-full px-4 py-2.5 bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-lg text-sm text-stone-700 dark:text-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-300 dark:focus:ring-stone-600"
             >
               <option value="">— Sélectionner une catégorie —</option>
-              {userCategories.map(cat => (
+              {layerCategories.map(cat => (
                 <option key={cat.id} value={cat.id}>
                   {isEmojiIcon(cat.icon || '') ? `${cat.icon} ` : ''}{cat.label}
                 </option>
@@ -264,8 +267,11 @@ export function ImportDocumentModal({ isOpen, onClose }: ImportDocumentModalProp
           <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg">
             <span className="text-blue-500">💡</span>
             <p className="text-xs text-blue-700 dark:text-blue-300">
-              Ce document sera visible <strong>uniquement par vous</strong>. 
-              Vous pourrez le proposer à l'équipe ensuite.
+              {targetLayer === 'project' ? (
+                <>Ce document sera partagé avec <strong>toute l'équipe du chantier</strong> et indexé pour le RAG.</>
+              ) : (
+                <>Ce document sera visible <strong>uniquement par vous</strong>. Vous pourrez le proposer à l'équipe ensuite.</>
+              )}
             </p>
           </div>
 

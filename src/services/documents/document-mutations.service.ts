@@ -16,6 +16,7 @@ export interface UploadFileInput {
   categoryId?: string; // UUID de la catégorie
   projectId?: string;
   description?: string;
+  layer?: DocumentLayer;
 }
 
 export interface UpdateFileInput {
@@ -30,7 +31,7 @@ export interface UpdateFileInput {
 // ============================================================
 
 /**
- * Upload un fichier dans le layer 'user' (Perso)
+ * Upload un fichier dans le layer spécifié (par défaut 'user')
  * Note: INSERT sur la table files (pas la vue)
  */
 export async function uploadFile(
@@ -38,7 +39,7 @@ export async function uploadFile(
 ): Promise<ServiceResult<SourceFile>> {
   try {
     const profile = await getCurrentProfile();
-    const { file, categoryId, projectId, description } = input;
+    const { file, categoryId, projectId, description, layer = 'user' } = input;
 
     // Générer un chemin unique
     const timestamp = Date.now();
@@ -60,16 +61,16 @@ export async function uploadFile(
       original_filename: file.name,
       mime_type: file.type,
       file_size: file.size,
-      layer: 'user' as DocumentLayer,
+      layer: layer as DocumentLayer,
       org_id: profile.org_id || null,
       project_id: projectId || null,
       created_by: profile.id,
       app_id: profile.app_id || null,
       storage_bucket: 'user-workspace',
       storage_path: storagePath,
-      ingestion_level: 'user',
+      ingestion_level: layer,
       processing_status: 'pending',
-      promotion_status: 'draft' as PromotionStatus,
+      promotion_status: (layer === 'user' ? 'draft' : 'approved') as PromotionStatus,
       metadata: {
         category: categoryId || null,
         description: description || null,
@@ -85,14 +86,13 @@ export async function uploadFile(
 
     if (error) throw error;
 
-    // Ajouter les permissions par défaut pour un document user
     const dataWithPermissions = {
       ...data,
       can_edit: true,
-      can_delete: true,
+      can_delete: layer === 'user',
     };
 
-    console.log('File uploaded:', data.id);
+    console.log('File uploaded:', data.id, 'layer:', layer);
     return { data: dataWithPermissions, error: null };
   } catch (error) {
     console.error('uploadFile error:', error);

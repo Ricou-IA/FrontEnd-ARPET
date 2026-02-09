@@ -11,6 +11,7 @@ import { getViewerType } from '@/types'
 import { ViewerToolbar } from './ViewerToolbar'
 import { PdfViewer } from './PdfViewer'
 import { ImageViewer } from './ImageViewer'
+import { MarkdownViewer } from './MarkdownViewer'
 
 // Constantes
 const ZOOM_STEP = 0.25
@@ -52,6 +53,7 @@ export function SplitViewPanel() {
 
   const isPdf = viewerType === 'pdf'
   const isImage = viewerType === 'image'
+  const isMarkdown = viewerType === 'markdown'
 
   // Fermer avec Escape
   useEffect(() => {
@@ -130,6 +132,16 @@ export function SplitViewPanel() {
     if (isImage) {
       return (
         <ImageViewer
+          url={viewerDocument.url}
+          filename={viewerDocument.filename}
+          zoom={viewerZoom}
+        />
+      )
+    }
+
+    if (isMarkdown) {
+      return (
+        <MarkdownViewer
           url={viewerDocument.url}
           filename={viewerDocument.filename}
           zoom={viewerZoom}

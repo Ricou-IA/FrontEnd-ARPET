@@ -48,13 +48,20 @@ export function isViewableFile(mimeType: string | null, filename: string): boole
   const isImageMime = mimeType?.startsWith('image/');
   const isImageExt = imageExtensions.some(ext => filename.toLowerCase().endsWith(ext));
 
-  return isImageMime || isImageExt;
+  if (isImageMime || isImageExt) return true;
+
+  // Markdown / Texte
+  const textExtensions = ['.md', '.markdown', '.txt'];
+  const isTextMime = mimeType === 'text/markdown' || mimeType === 'text/plain';
+  const isTextExt = textExtensions.some(ext => filename.toLowerCase().endsWith(ext));
+
+  return isTextMime || isTextExt;
 }
 
 /**
  * Helper: Obtenir le type de viewer approprié
  */
-export function getViewerType(mimeType: string | null, filename: string): 'pdf' | 'image' | 'unsupported' {
+export function getViewerType(mimeType: string | null, filename: string): 'pdf' | 'image' | 'markdown' | 'unsupported' {
   if (mimeType?.includes('pdf') || filename.toLowerCase().endsWith('.pdf')) {
     return 'pdf';
   }
@@ -65,6 +72,15 @@ export function getViewerType(mimeType: string | null, filename: string): 'pdf' 
 
   if (isImageMime || isImageExt) {
     return 'image';
+  }
+
+  // Markdown / Texte
+  const textExtensions = ['.md', '.markdown', '.txt'];
+  const isTextMime = mimeType === 'text/markdown' || mimeType === 'text/plain';
+  const isTextExt = textExtensions.some(ext => filename.toLowerCase().endsWith(ext));
+
+  if (isTextMime || isTextExt) {
+    return 'markdown';
   }
 
   return 'unsupported';
