@@ -22,27 +22,12 @@ export { type RagBackend } from './chat-config'
 export const RAG_ENDPOINT = 'baikal-retrieval'
 
 // ============================================================
-// CROSS-RÉFÉRENCEMENT DOCUMENTS
+// SUGGESTIONS CONTEXTUELLES
 // ============================================================
 
-export type CrossRefMode = 'compare' | 'synthesize' | 'compliance'
-
-export interface CrossRefAction {
-  type: CrossRefMode
-  label: string
-  description: string
-  documents: string[]
-  prompt_hint: string
-}
-
-export interface CrossRefAnalysis {
-  is_cross_ref: boolean
-  cross_ref_type: CrossRefMode | null
-  detected_documents: string[]
-  detected_norms: string[]
-  detected_lot: string | null
-  suggested_actions: CrossRefAction[]
-  detection_method: 'heuristic' | 'llm'
+export interface SuggestionItem {
+  text: string
+  source_hint: string
 }
 
 // ============================================================
@@ -59,8 +44,7 @@ export interface ChatRequest {
   intent?: string
   rewritten_query?: string
   detected_documents?: string[]
-  cross_ref_mode?: CrossRefMode
-  cross_ref_context?: string
+  enable_suggestions?: boolean
 }
 
 export interface RawChatResponse {
@@ -103,7 +87,6 @@ export interface RawChatResponse {
     rewritten_query: string
     detected_documents: string[]
     reasoning: string
-    cross_ref?: CrossRefAnalysis
   }
   cache_type?: string
   answer_format?: string
@@ -132,7 +115,6 @@ export interface ChatResponse {
     rewritten_query: string
     detected_documents: string[]
     reasoning: string
-    cross_ref?: CrossRefAnalysis
   }
   files_count?: number
   chunks_count?: number
@@ -209,14 +191,14 @@ export interface SSESourcesPayload {
 export type OnTokenCallback = (token: string) => void
 export type OnStepCallback = (step: SSEStepEvent) => void
 export type OnSourcesCallback = (sources: MessageSource[], metadata: Partial<ChatResponse>) => void
-export type OnCrossRefActionsCallback = (actions: CrossRefAction[]) => void
+export type OnSuggestionsCallback = (suggestions: SuggestionItem[]) => void
 export type OnErrorCallback = (error: Error) => void
 
 export interface StreamOptions {
   onToken: OnTokenCallback
   onStep?: OnStepCallback
   onSources?: OnSourcesCallback
-  onCrossRefActions?: OnCrossRefActionsCallback
+  onSuggestions?: OnSuggestionsCallback
   onError?: OnErrorCallback
   onComplete?: () => void
 }

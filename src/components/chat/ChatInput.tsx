@@ -1,43 +1,45 @@
 // ============================================================
 // ARPET - ChatInput Component
-// Version: 4.0.0 - Remplacement dictée par mémo vocal
-// Date: 2026-02-06
+// Version: 5.0.0 - Toggle Assistant (suggestions contextuelles)
+// Date: 2026-02-11
 // ============================================================
 
 import { useState, useRef, KeyboardEvent } from 'react'
-import { Paperclip, Send, Mic, Sparkles, Save, Layers } from 'lucide-react'
+import { Paperclip, Send, Mic, Sparkles, Save, Lightbulb } from 'lucide-react'
 import { MemoModal } from '@/components/meeting'
-import { CrossRefWizard, type WizardSubmitResult } from './CrossRefWizard'
 
 interface ChatInputProps {
   onSendMessage: (content: string, files?: File[], deepAnalysis?: boolean) => void
-  onWizardSubmit?: (result: WizardSubmitResult) => void
   onSaveConversation?: () => void
   disabled?: boolean
   placeholder?: string
-  /** ID du projet actif (pour mémo vocal et wizard) */
+  /** ID du projet actif (pour mémo vocal) */
   projectId?: string | null
   /** ID de l'organisation (pour mémo vocal) */
   orgId?: string | null
   /** Nom du projet (pour affichage dans mémo modal) */
   projectName?: string | null
+  /** État du toggle suggestions (remonté au parent) */
+  enableSuggestions?: boolean
+  /** Callback quand le toggle change */
+  onToggleSuggestions?: (enabled: boolean) => void
 }
 
 export function ChatInput({
   onSendMessage,
-  onWizardSubmit,
   onSaveConversation,
   disabled = false,
   placeholder = "De quoi avez-vous besoin ?...",
   projectId,
   orgId,
   projectName,
+  enableSuggestions = false,
+  onToggleSuggestions,
 }: ChatInputProps) {
   const [content, setContent] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [showMemoModal, setShowMemoModal] = useState(false)
   const [isDeepAnalysis, setIsDeepAnalysis] = useState(false)
-  const [showWizard, setShowWizard] = useState(false)
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const expertFileInputRef = useRef<HTMLInputElement>(null)
@@ -101,32 +103,12 @@ export function ChatInput({
     textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`
   }
 
-  // Handler wizard submit : ferme le wizard et remonte le resultat
-  const handleWizardSubmit = (result: WizardSubmitResult) => {
-    setShowWizard(false)
-    onWizardSubmit?.(result)
-  }
-
-  // Afficher le bouton wizard seulement si callback et projet actif
-  const showWizardButton = !!onWizardSubmit && !!projectId
-
   // Le bouton mémo est actif seulement si un projet est sélectionné
   const canRecordMemo = !!projectId && !!orgId
 
   return (
     <>
       <div className="relative">
-        {/* Wizard Cross-Ref (popover au-dessus) */}
-        {showWizardButton && (
-          <CrossRefWizard
-            isOpen={showWizard}
-            onClose={() => setShowWizard(false)}
-            onSubmit={handleWizardSubmit}
-            projectId={projectId || null}
-            disabled={disabled}
-          />
-        )}
-
         <div className="chat-container bg-transparent border-0 shadow-none rounded-none p-0 flex flex-col gap-3">
           {/* Zone de texte - Compacte (1 ligne) avec auto-expansion */}
           <textarea
@@ -199,19 +181,20 @@ export function ChatInput({
                 <Mic className="w-4.5 h-4.5" />
               </button>
 
-              {/* Bouton Wizard Cross-Ref */}
-              {showWizardButton && (
+              {/* Toggle Assistant (suggestions contextuelles) */}
+              {onToggleSuggestions && (
                 <button
-                  onClick={() => setShowWizard(prev => !prev)}
+                  onClick={() => onToggleSuggestions(!enableSuggestions)}
                   disabled={disabled}
-                  className={`p-2 rounded-lg transition disabled:opacity-50 ${
-                    showWizard
-                      ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30'
-                      : 'text-stone-400 hover:text-indigo-500 dark:hover:text-indigo-400'
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition disabled:opacity-50 ${
+                    enableSuggestions
+                      ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
+                      : 'text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-400 border border-transparent hover:border-stone-200 dark:hover:border-stone-700'
                   }`}
-                  title="Recherche croisée"
+                  title={enableSuggestions ? 'Désactiver les suggestions' : 'Activer les suggestions de suivi'}
                 >
-                  <Layers className="w-4.5 h-4.5" />
+                  <Lightbulb className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Assistant</span>
                 </button>
               )}
 

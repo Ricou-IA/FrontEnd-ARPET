@@ -12,7 +12,6 @@ import type {
   RawChatResponse,
   ChatResponse,
   SSESourcesPayload,
-  CrossRefAnalysis
 } from './chat-types'
 
 // ============================================================
@@ -101,58 +100,6 @@ export function mapVoteContext(context?: RawChatResponse['vote_context']): VoteC
   }
 }
 
-export function mapCrossRefAnalysis(
-  crossRef?: Record<string, unknown>
-): CrossRefAnalysis | undefined {
-  if (!crossRef || !crossRef.is_cross_ref) return undefined
-
-  const validModes = ['compare', 'synthesize', 'compliance'] as const
-  const crossRefType = validModes.includes(crossRef.cross_ref_type as typeof validModes[number])
-    ? (crossRef.cross_ref_type as CrossRefAnalysis['cross_ref_type'])
-    : null
-
-  const actions = Array.isArray(crossRef.actions)
-    ? crossRef.actions
-        .filter((a: Record<string, unknown>) => a && validModes.includes(a.type as typeof validModes[number]))
-        .map((a: Record<string, unknown>) => ({
-          type: a.type as CrossRefAnalysis['suggested_actions'][number]['type'],
-          label: String(a.label || ''),
-          description: String(a.description || ''),
-          documents: Array.isArray(a.documents) ? a.documents.map(String) : [],
-          prompt_hint: String(a.prompt_hint || ''),
-        }))
-    : []
-
-  // Aussi accepter suggested_actions comme clé alternative
-  const suggestedActions = actions.length > 0
-    ? actions
-    : Array.isArray(crossRef.suggested_actions)
-      ? crossRef.suggested_actions
-          .filter((a: Record<string, unknown>) => a && validModes.includes(a.type as typeof validModes[number]))
-          .map((a: Record<string, unknown>) => ({
-            type: a.type as CrossRefAnalysis['suggested_actions'][number]['type'],
-            label: String(a.label || ''),
-            description: String(a.description || ''),
-            documents: Array.isArray(a.documents) ? a.documents.map(String) : [],
-            prompt_hint: String(a.prompt_hint || ''),
-          }))
-      : []
-
-  return {
-    is_cross_ref: true,
-    cross_ref_type: crossRefType,
-    detected_documents: Array.isArray(crossRef.detected_documents)
-      ? crossRef.detected_documents.map(String)
-      : [],
-    detected_norms: Array.isArray(crossRef.detected_norms)
-      ? crossRef.detected_norms.map(String)
-      : [],
-    detected_lot: crossRef.detected_lot ? String(crossRef.detected_lot) : null,
-    suggested_actions: suggestedActions,
-    detection_method: crossRef.detection_method === 'llm' ? 'llm' : 'heuristic',
-  }
-}
-
 export function mapResponse(raw: RawChatResponse): ChatResponse {
   return {
     response: raw.response,
@@ -173,8 +120,10 @@ export function mapResponse(raw: RawChatResponse): ChatResponse {
     vote_context: mapVoteContext(raw.vote_context),
     analysis: raw.analysis
       ? {
-          ...raw.analysis,
-          cross_ref: mapCrossRefAnalysis(raw.analysis.cross_ref as unknown as Record<string, unknown>),
+          intent: raw.analysis.intent,
+          rewritten_query: raw.analysis.rewritten_query,
+          detected_documents: raw.analysis.detected_documents,
+          reasoning: raw.analysis.reasoning,
         }
       : undefined,
     cache_type: raw.cache_type,

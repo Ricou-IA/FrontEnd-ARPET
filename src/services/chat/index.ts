@@ -21,14 +21,12 @@ export type {
   SSEStepEvent,
   SSESourcesPayload,
   StreamOptions,
+  SuggestionItem,
   OnTokenCallback,
   OnStepCallback,
   OnSourcesCallback,
-  OnCrossRefActionsCallback,
+  OnSuggestionsCallback,
   OnErrorCallback,
-  CrossRefMode,
-  CrossRefAction,
-  CrossRefAnalysis,
 } from './chat-types'
 
 // Request (appel classique)

@@ -14,11 +14,8 @@ import { RagBadge } from '../RagBadge'
 import { formatContent } from '../utils/format-content'
 import { KnowledgeHeader } from './KnowledgeHeader'
 import { SourcesList } from './SourcesList'
-import { CrossRefActions } from './CrossRefActions'
 import { CopyButton } from './CopyButton'
 import { VoteButtons } from './VoteButtons'
-
-type CrossRefActionItem = NonNullable<Message['cross_ref_actions']>[number]
 
 interface AssistantMessageProps {
   message: Message
@@ -26,7 +23,6 @@ interface AssistantMessageProps {
   projectId?: string | null
   activeProject?: { id: string; org_id: string } | null
   onVoteComplete?: (message: Message, voteType: 'up' | 'down', qaId?: string) => void
-  onCrossRefAction?: (action: CrossRefActionItem, originalMessage: Message) => void
 }
 
 export function AssistantMessage({
@@ -35,7 +31,6 @@ export function AssistantMessage({
   projectId,
   activeProject,
   onVoteComplete,
-  onCrossRefAction,
 }: AssistantMessageProps) {
   const { profile } = useAuth()
   const { openViewer } = useAppStore()
@@ -261,15 +256,6 @@ export function AssistantMessage({
             responseContent={message.content}
             onOpenViewer={openViewer}
           />
-
-          {/* Actions de croisement (Comparer, Conformité, Synthétiser) */}
-          {message.cross_ref_actions && message.cross_ref_actions.length > 0 && !message.isStreaming && (
-            <CrossRefActions
-              actions={message.cross_ref_actions}
-              onAction={(action) => onCrossRefAction?.(action, message)}
-              disabled={!onCrossRefAction}
-            />
-          )}
 
           {/* Erreur de vote */}
           {voteError && (

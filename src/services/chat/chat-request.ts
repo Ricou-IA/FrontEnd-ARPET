@@ -23,8 +23,7 @@ export async function sendMessage(request: ChatRequest): Promise<ChatResult> {
       intent,
       rewritten_query,
       detected_documents,
-      cross_ref_mode,
-      cross_ref_context,
+      enable_suggestions,
     } = request
 
     if (!query?.trim()) {
@@ -59,8 +58,7 @@ export async function sendMessage(request: ChatRequest): Promise<ChatResult> {
     if (intent) body.intent = intent
     if (rewritten_query) body.rewritten_query = rewritten_query
     if (detected_documents?.length) body.detected_documents = detected_documents
-    if (cross_ref_mode) body.cross_ref_mode = cross_ref_mode
-    if (cross_ref_context) body.cross_ref_context = cross_ref_context
+    if (enable_suggestions) body.enable_suggestions = true
 
     const { data, error } = await supabase.functions.invoke(activeEndpoint, { body })
 

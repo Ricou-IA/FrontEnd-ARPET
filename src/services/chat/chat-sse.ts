@@ -3,7 +3,7 @@
 // ============================================================
 
 import { supabase } from '../../lib/supabase'
-import { mapResponse, mapSSESources, mapSSESourcesPayload, mapCrossRefAnalysis } from './chat-mapping'
+import { mapResponse, mapSSESources, mapSSESourcesPayload } from './chat-mapping'
 import { getRagBackend, getRagEndpoint } from './chat-config'
 import type {
   ChatRequest,
@@ -94,14 +94,13 @@ function processSSEEvent(
         break
       }
 
-      case 'analysis': {
-        // Extraire cross_ref depuis le payload analysis
-        const crossRef = mapCrossRefAnalysis(parsed.cross_ref)
-        if (crossRef && crossRef.suggested_actions.length > 0) {
+      case 'suggestions': {
+        const suggestions = parsed.suggestions
+        if (Array.isArray(suggestions) && suggestions.length > 0) {
           if (import.meta.env.DEV) {
-            console.log(`[ChatService] Cross-ref détecté (${crossRef.detection_method}): ${crossRef.detected_norms.join(', ')} — ${crossRef.suggested_actions.length} actions`)
+            console.log(`[ChatService] Suggestions reçues: ${suggestions.length}`)
           }
-          options.onCrossRefActions?.(crossRef.suggested_actions)
+          options.onSuggestions?.(suggestions)
         }
         break
       }
@@ -148,8 +147,7 @@ export async function sendMessageStream(
     intent,
     rewritten_query,
     detected_documents,
-    cross_ref_mode,
-    cross_ref_context,
+    enable_suggestions,
   } = request
 
   if (!query?.trim()) {
@@ -194,8 +192,7 @@ export async function sendMessageStream(
   if (intent) body.intent = intent
   if (rewritten_query) body.rewritten_query = rewritten_query
   if (detected_documents?.length) body.detected_documents = detected_documents
-  if (cross_ref_mode) body.cross_ref_mode = cross_ref_mode
-  if (cross_ref_context) body.cross_ref_context = cross_ref_context
+  if (enable_suggestions) body.enable_suggestions = true
 
   const { data: sessionData } = await supabase.auth.getSession()
   const accessToken = sessionData?.session?.access_token

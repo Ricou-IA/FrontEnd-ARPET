@@ -1,6 +1,6 @@
 // ============================================================
 // ARPET - Chat Service
-// Version: 4.0.0 - V3 Production (sans toggle)
+// Version: 5.0.0 - Suggestions contextuelles (sans cross-ref)
 // Re-export depuis modules éclatés (rétro-compatibilité)
 // ============================================================
 
@@ -16,11 +16,10 @@ export type {
   SSEStepEvent,
   SSESourcesPayload,
   StreamOptions,
+  SuggestionItem,
   OnTokenCallback,
   OnStepCallback,
   OnSourcesCallback,
-  OnCrossRefActionsCallback,
+  OnSuggestionsCallback,
   OnErrorCallback,
-  CrossRefAction,
-  CrossRefMode,
 } from './chat'

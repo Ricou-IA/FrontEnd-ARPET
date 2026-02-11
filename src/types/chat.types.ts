@@ -125,16 +125,13 @@ export interface Message {
   user_vote?: 'up' | 'down' | null;
 
   // =============================================
-  // CROSS-RÉFÉRENCEMENT
+  // SUGGESTIONS CONTEXTUELLES
   // =============================================
 
-  /** Actions de croisement proposées par le backend (Comparer, Synthétiser, Conformité) */
-  cross_ref_actions?: Array<{
-    type: 'compare' | 'synthesize' | 'compliance'
-    label: string
-    description: string
-    documents: string[]
-    prompt_hint: string
+  /** Questions de suivi suggérées par le backend */
+  suggestions?: Array<{
+    text: string
+    source_hint: string
   }>;
 
   // État UI
