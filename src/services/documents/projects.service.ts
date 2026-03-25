@@ -22,8 +22,9 @@ export async function getUserProjects(): Promise<ServiceResult<Project[]>> {
     let query = supabase
       .schema('core')
       .from('projects')
-      .select('id, name, org_id, description, status, created_at, updated_at')
+      .select('id, name, org_id, description, status, created_at, updated_at, organization:organizations!inner(app_id)')
       .eq('status', 'active')
+      .eq('organization.app_id', 'arpet')
       .order('name', { ascending: true });
 
     // Filtrer par org_id seulement si défini
