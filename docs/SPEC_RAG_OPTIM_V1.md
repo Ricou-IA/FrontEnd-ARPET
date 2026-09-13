@@ -267,6 +267,32 @@ Juge de fidélité (étage 2) : **non exécuté** — `GEMINI_API_KEY` absente d
 
 Décisions d'ajustement du golden set après baseline (à appliquer **avant** le run S1 pour comparer à périmètre égal, ou à conserver et documenter) : C4-001 critère « énergétique » ; C4-002 critère à redéfinir ; C1-006 à trancher après lecture du chunk p.57.
 
+### 7.2 Baseline synthétique v2.0.0-synth (2026-09-13, 60 questions, `eval/golden-set.synthetic.json`)
+
+Jeu complémentaire écrit par Claude Code à partir des chunks en base (chaque attendu vérifié dans le chunk cité), formulé en langage oral de conducteur de travaux, sans le vocabulaire des chunks. Couvre deux projets absents du set réel : **CMP** (5 CCTP de lots + CCAP, 538 chunks) et **Citroën** (CCAG + CR n°40/41, 300 chunks). Scores toujours séparés du set réel (`--golden eval/golden-set.synthetic.json --tag <tag>-synth`). Rapport : `Frontend-Baikal/eval/reports/baseline-v2.0.0-synth.md`.
+
+Le run 1 a été joué avec les critères v1 (critères 55 %). Huit critères trop stricts ont été corrigés en v1.1 (durées en lettres, graphie « NF C 15-100 », mots-clés absents d'une réponse juste) ; re-score hors ligne sur les mêmes réponses :
+
+| Classe | n | Recall doc | Critères v1.1 | p50 | Agentique | Lecture |
+|---|---|---|---|---|---|---|
+| C1 fait précis | 8 | 100 % | 100 % | 2,3 s | 0 % | les faits simples passent, y compris sur CMP et Citroën |
+| C2 info éclatée | 6 | 100 % | 50 % | 2,3 s | 0 % | SC2-004 répond depuis la norme NFP03-001 (couche app) au lieu du CCAP EHPAD → **P8** |
+| C3 croisement | 10 | 100 % | 40 % | 2,5 s | 0 % | le premier document est traité, le second ignoré (CR 41, lot 07, acte d'engagement, lot plâtrerie) → **P6/S2.3** |
+| C4 synthèse | 6 | 100 % | 100 % | 3,8 s | 0 % | résumés corrects sur les documents à L0 (contraste avec C4-004 « résume le CCAG » du set réel) |
+| C5 suivi implicite | 8 | 88 % | 50 % | 3,0 s | 50 % | SC5-001 répond depuis le CCAG art. 53.2 (couche app), SC5-008 confond dépassement de délai et de montant → **P4 + P8** |
+| C6 norme / code | 10 | 100 % | 100 % | 1,9 s | 0 % | les normes citées dans un chunk sont trouvées quand la question est thématique |
+| C7 hors corpus | 6 | n/a | 100 % | 1,9 s | 0 % | aucune fuite inter-projets (charte chantier vert sur CMP, amiante sur Citroën) |
+| C8 verbatim | 6 | 83 % | **0 %** | 1,7 s | 0 % | **« Que dit l'article 3.7 / 9.5 / 8.2 / 3.3 / 5.4 ? » → six refus « pas trouvé »** alors que le document est remonté → **P2** (numéro d'article inexploité par le FTS et absent de l'embedding) |
+| **GLOBAL** | **60** | **96 %** | **68 %** | **2,3 s** | **7 %** | |
+
+**Trois enseignements nets, absents ou faibles dans le set réel :**
+
+1. **Recherche par numéro d'article : 0/6.** Le document est presque toujours remonté (recall 83 %) mais jamais le bon chunk, et la génération refuse. C'est la cible n°1 de S1.1 (conserver « 3.7 », « 9.5 », « 8.2 » dans `extractKeywords` et les passer au FTS en OR).
+2. **La couche app parasite les projets** (P8) : sur 4 échecs C2/C5, la réponse cite le CCAG ou la NFP03-001 génériques au lieu du CCAP du projet. Justifie S4.4 (pondération project > app hors questions normatives) plus tôt que prévu, ou un filtre `include_app_layer` piloté par l'intent.
+3. **Multi-documents : 40 %.** Le mode agentique ne se déclenche jamais sur C3 (0 %) parce que le premier document suffit à passer la quality gate ; le second n'est jamais cherché. Confirme la comparaison déterministe de S2.3 (recherche ciblée par document détecté).
+
+Latence : p50 2,3 s et agentique 7 % (contre 4,1 s et 20 % sur le set réel) — les questions synthétiques sont plus « propres », le set réel reste la référence pour la latence perçue.
+
 ---
 
 *Document généré à partir de l'audit du 2026-06-12 (lecture complète de `baikal-retrieval` v2.0.0, de `rag.match_documents_v14` en production, de la config live `config.agent_prompts` et des statistiques du corpus).*
