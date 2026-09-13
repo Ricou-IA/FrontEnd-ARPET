@@ -1,6 +1,6 @@
 # SPEC_RAG_OPTIM_V1 — Optimisation du pipeline RAG ARPET/BAIKAL
 
-> **Statut** : spec validée (audit + plan en 5 sprints approuvés le 2026-06-12). **Sprint 0 terminé le 2026-09-13** (baseline v2.0.0 figée). Prochain : plan d'implémentation détaillé du Sprint 1.
+> **Statut** : spec validée (audit + plan en 5 sprints approuvés le 2026-06-12). **Sprint 0 terminé le 2026-09-13** (baseline v2.0.0 figée). Prochain : exécution du Sprint 1 (plan écrit le 2026-09-13).
 > **Périmètre** : Edge Function `baikal-retrieval` (repo **Frontend-Baikal**, `supabase/functions/baikal-retrieval/`), fonction SQL `rag.match_documents_v14` → `v15`, corpus `rag.documents`, frontend chat (repo **Frontend-ARPET**, `src/services/chat/` + composants)
 > **Règles** : Claude Code modifie le code, **Eric déploie** les Edge Functions ; toute migration SQL est soumise avant application ; rien n'est poussé sur GitHub sans accord ; chaque sprint se conclut par un passage du banc d'éval.
 
@@ -220,7 +220,7 @@ Les questions des utilisateurs sont infinies, mais les **situations de retrieval
 | Sprint | Statut | Baseline avant | Rapport après |
 |---|---|---|---|
 | 0 — Mesure | ✅ terminé 2026-09-13 | — | `Frontend-Baikal/eval/reports/baseline-v2.0.0.md` |
-| 1 — Retrieval | 🔜 à planifier | baseline-v2.0.0 | |
+| 1 — Retrieval | 📝 plan écrit le 2026-09-13 (`Frontend-Baikal/docs/superpowers/plans/2026-09-13-sprint1-rag-retrieval.md`) | baseline-v2.0.0 + synth | |
 | 2 — Multi-docs | ⏳ | | |
 | 3 — Génération + reranker | ⏳ | | |
 | 4 — Corpus | ⏳ | | |
