@@ -215,11 +215,21 @@ git push origin master    # Auto-deploy Vercel
 
 ## 📌 État Courant
 
-**Date** : 2026-02-07
-**Branche** : `refactor/technical-debt`
-**Statut build** : ✅ OK
-**Dernier commit** : `4f4ee00` — refactor: split large files into modular structure (non poussé)
-**Modifications non commitées** : UX Sources Chat + Cross-Ref P1/P2/P3 + Meeting V3 phases 1-7 (~45 fichiers modifiés)
+**Date** : 2026-09-15
+**Branche** : `main`
+**RAG prod** : `baikal-retrieval` v2.1.0 — Sprint 1 clos, fusionné dans `main` du repo Baikal (commit de merge `51dc191`), puis reprise « documents nommés » jusqu'au commit `038242a`
+**Sprint 1** : FTS OR-isé (`match_documents_v15`), pondération couche application, condensation des suivis (condenser), gate agentique lisible, page (`page_start`, P11) corrigée, documents nommés (résolution scalable)
+**Résultats** : réel (35 q.) recall doc 97 %, critères 69 % (24/35), MRR 0,79, Page OK 71 %, p50 4,3 s, agentique 26 % — synthétique (60 q.) recall doc 98 %, critères 83 % (50/60), MRR 0,93, p50 2,9 s, agentique 8 %
+**Prochaine étape** : Sprint 2 (multi-documents, prompt du condenser, résolution couche application CCAG/DTU)
+
+### Sprint 1 RAG — ✅ TERMINÉ (2026-09-13 → 15)
+
+> Résultats détaillés : `docs/SPEC_RAG_OPTIM_V1.md` §7.3
+> Plans (repo Baikal) : `docs/superpowers/plans/2026-09-13-sprint1-rag-retrieval.md` et `2026-09-15-documents-nommes-scalable.md`
+
+Sprint 1 de `SPEC_RAG_OPTIM_V1.md` clos : FTS OR-isé + `rag.match_documents_v15` (recall documentaire réel 90 % → 97 %), pondération 0,5 de la couche application (réponses projet privilégiées sur les questions non normatives), condensation des suivis (condenser), gate agentique à raisons lisibles (`fast_path_ok` / `too_few_vector_chunks` / `low_max_similarity`), champ page (`page_start`, P11) corrigé et désormais mesuré, documents nommés (résolution scalable par type de document, hors CCAG jusqu'au Sprint 2).
+
+Prochaine étape : Sprint 2 (multi-documents S2.x, prompt du condenser, résolution couche application pour CCAG/DTU).
 
 ---
 

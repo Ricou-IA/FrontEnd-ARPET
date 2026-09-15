@@ -220,7 +220,7 @@ Les questions des utilisateurs sont infinies, mais les **situations de retrieval
 | Sprint | Statut | Baseline avant | Rapport après |
 |---|---|---|---|
 | 0 — Mesure | ✅ terminé 2026-09-13 | — | `Frontend-Baikal/eval/reports/baseline-v2.0.0.md` |
-| 1 — Retrieval | 📝 plan écrit le 2026-09-13 (`Frontend-Baikal/docs/superpowers/plans/2026-09-13-sprint1-rag-retrieval.md`) | baseline-v2.0.0 + synth | |
+| 1 — Retrieval | ✅ terminé 2026-09-15 (plan `Frontend-Baikal/docs/superpowers/plans/2026-09-13-sprint1-rag-retrieval.md`) | `v2.0.0` + synth | `Frontend-Baikal/eval/reports/baseline-v2.1.0.md` + `-synth.md` |
 | 2 — Multi-docs | ⏳ | | |
 | 3 — Génération + reranker | ⏳ | | |
 | 4 — Corpus | ⏳ | | |
@@ -263,7 +263,7 @@ Juge de fidélité (étage 2) : **non exécuté** — `GEMINI_API_KEY` absente d
 
 | # | Problème | Localisation | Impact |
 |---|---|---|---|
-| P11 | **`page` toujours nul dans le payload `sources`** : `sources.ts` lit `chunk.metadata.page`, mais les chunks du pipeline v5.x portent `page_start` / `page_end` (vérifié en base le 2026-09-13 : clé `page` absente). Le frontend ARPET attend `page` pour les citations cliquables, le harnais pour « Page OK » | `sources.ts:60` — fallback `metadata.page ?? metadata.page_start` | citations inline sans page (le clic vers la page ne fonctionne pas), métrique page impossible |
+| P11 | ✅ **Corrigé au Sprint 1** (commit `2f97aea`) — `sources.ts` lit désormais `page_start` (fallback `page`) au lieu de `chunk.metadata.page` seul, qui restait nul sur les chunks du pipeline v5.x. « Page OK » est désormais mesuré : **71 %** réel (`baseline-v2.1.0.md`), **70 %** synthétique (`baseline-v2.1.0-synth.md`) | `sources.ts:60` | citations inline avec page correcte, métrique « Page OK » exploitable pour le suivi |
 
 Décisions d'ajustement du golden set après baseline (à appliquer **avant** le run S1 pour comparer à périmètre égal, ou à conserver et documenter) : C4-001 critère « énergétique » ; C4-002 critère à redéfinir ; C1-006 à trancher après lecture du chunk p.57.
 
@@ -292,6 +292,94 @@ Le run 1 a été joué avec les critères v1 (critères 55 %). Huit critères tr
 3. **Multi-documents : 40 %.** Le mode agentique ne se déclenche jamais sur C3 (0 %) parce que le premier document suffit à passer la quality gate ; le second n'est jamais cherché. Confirme la comparaison déterministe de S2.3 (recherche ciblée par document détecté).
 
 Latence : p50 2,3 s et agentique 7 % (contre 4,1 s et 20 % sur le set réel) — les questions synthétiques sont plus « propres », le set réel reste la référence pour la latence perçue.
+
+### 7.3 Sprint 1 — résultats (2026-09-15, code jusqu'au commit `038242a`)
+
+Rejeu complet des deux golden sets sur `baikal-retrieval` v2.1.0 (FTS OR-isé + `match_documents_v15`, condensation des suivis, pondération couche application, P11 corrigé, documents nommés). Rapports : `Frontend-Baikal/eval/reports/baseline-v2.1.0.md` et `baseline-v2.1.0-synth.md`, comparés à `baseline-v2.0.0.md` / `-synth.md` (§7.1, §7.2).
+
+#### Réel (35 questions, golden set v1)
+
+| Métrique | v2.0.0 | v2.1.0 |
+|---|---|---|
+| Recall documentaire | 90 % | 97 % |
+| Critères | 71 % | 69 % (24/35 ; 71 % au rejeu précédent du même code — variance inter-runs ±1 question) |
+| MRR | 0,73 | 0,79 |
+| Page OK (P11) | non mesurable | 71 % |
+| p50 | 4,1 s | 4,3 s |
+| Agentique | 20 % | 26 % |
+| C7 sentinelles | 4/4 | 4/4 (C7-004 refusée : « Aucun fichier de CCTP ne porte « gros » ou « œuvre », donc le document … n'existe pas dans le projet. Cependant, dans le CCAP… ») |
+
+Par classe (critères, v2.0.0 → v2.1.0) :
+
+| Classe | v2.0.0 | v2.1.0 |
+|---|---|---|
+| C1 fait précis | 6/8 | 7/8 |
+| C2 info éclatée | 5/5 | 3/5 |
+| C3 croisement | 3/4 | 3/4 |
+| C4 synthèse | 1/4 | 2/4 |
+| C5 suivi implicite | 2/4 | 2/4 |
+| C6 norme / code | 2/3 | 2/3 |
+| C7 hors corpus | 4/4 | 4/4 |
+| C8 verbatim | 2/3 | 1/3 |
+
+Gains nominatifs (échec v2.0.0 → réussite v2.1.0) : C1-005, C1-006, C4-002, C8-001.
+Pertes nominatives (réussite v2.0.0 → échec v2.1.0) : C1-002, C2-001, C2-003, C8-002, C8-003.
+
+#### Synthétique (60 questions, golden set synthétique v1.2)
+
+| Métrique | v2.0.0 | v2.1.0 |
+|---|---|---|
+| Recall documentaire | 96 % | 98 % |
+| Critères | 55 % à l'exécution (33/60) ; 68 % après re-score des critères corrigés (§7.2) | 83 % (50/60) |
+| MRR | 0,78 | 0,93 |
+| p50 | 2,3 s | 2,9 s |
+| Agentique | 7 % | 8 % |
+| C7 hors corpus | 6/6 | 6/6 |
+
+Par classe (critères, v2.0.0 → v2.1.0) :
+
+| Classe | v2.0.0 | v2.1.0 |
+|---|---|---|
+| C1 | 7/8 | 8/8 |
+| C2 | 2/6 | 5/6 |
+| C3 | 3/10 | 7/10 |
+| C4 | 3/6 | 5/6 |
+| C5 | 4/8 | 5/8 |
+| C6 | 8/10 | 10/10 |
+| C7 | 6/6 | 6/6 |
+| C8 | 0/6 | 4/6 |
+
+Gains : SC1-001, SC2-001, SC2-004, SC2-005, SC3-003, SC3-004, SC3-005, SC3-008, SC4-001, SC4-002, SC4-004, SC5-001, SC5-004, SC6-003, SC6-006, SC8-001, SC8-002, SC8-004, SC8-005.
+Pertes : SC4-006, SC5-007.
+Numéros d'article (C8) : 0/6 → 4/6. Croisements (C3) : 3/10 → 7/10.
+
+#### Classement des échecs restants — réel
+
+- **Critère à revoir** : C4-001 (réponse dit « rénovation énergétique », le critère attend « réhabilitation énergétique ») ; C6-003 (la réponse traite les articles L. 8221-3 à 5 du Code du travail sans écrire « travail dissimulé ») ; C3-001 (« désamiantage » attendu dans une comparaison MT/CCTP) ; C2-003 (répond 100/150 €/jour depuis le CCAP du projet au lieu du plafond 10 % du CCAG — réponse plus utile pour l'utilisateur, conséquence voulue du poids 0,5 de la couche application, critère du set réel à documenter) ; C8-003 (annexe 2 de la charte : contenu juste, libellé exact « Communication Parties Prenantes » absent).
+- **Sprint 2** : C5-002 et C5-003 (condenser : réécriture de suivi imparfaite, recopie de la réponse précédente) ; C8-002 (« article 2 Définitions » = CCAG de la couche application, la réponse prend l'article 2 du CCAP projet) ; C1-002 (14 mois lus dans le Mémoire Technique p.29 au lieu de 9 mois — arbitrage multi-documents) ; C2-001 (refus alors que le CCTP p.55 est remonté — prompt/retrieval).
+- **Corpus (Sprint 4)** : C4-004 (CCAG legacy sans enfants L1 liés, P3).
+- **Variance** : C3-004 (recall perdu sur un rejeu, retrouvé sur l'autre).
+
+#### Classement des échecs restants — synthétique
+
+- **Multi-documents / croisements (Sprint 2)** : SC3-006, SC3-007, SC3-010.
+- **Suivis / condenser (Sprint 2)** : SC5-005, SC5-007, SC5-008.
+- **Numéro d'article ou de point non retrouvé (Sprint 2, P2 résiduel)** : SC8-003 (« 3.6 du CCTP du lot 06 »), SC8-006 (« point 5.4 de la charte »).
+- **Critère de détail dans un résumé** : SC2-006 (« auto-lissant »), SC4-006 (« dalles sur plots »).
+
+#### Enseignements du Sprint 1
+
+1. **Full-text OR-isé + v15** : le recall documentaire réel passe de 90 à 97 % ; les numéros d'article sont désormais exploités (synthétique C8 0/6 → 4/6).
+2. **Condensation des suivis** : réécritures pertinentes dans la majorité des cas ; défaut connu : le condenser recopie parfois la réponse précédente dans la question réécrite (C5-003) → prompt à corriger au Sprint 2.
+3. **Gate agentique lisible** : sur le rejeu final, distribution des raisons 93 `fast_path_ok`, 13 `too_few_vector_chunks`, 1 `low_max_similarity` (107 requêtes journalisées, soit ~87 % / 12 % / 1 %).
+4. **Poids 0,5 de la couche application** : C2-003 répond depuis le CCAP du projet (100/150 €) au lieu du plafond CCAG — réponse plus utile, à documenter dans le critère.
+5. **Documents nommés (résolution scalable)** : quand la question nomme un document, une requête ciblée par type (`sources.files`, regex insensible à la casse, limite 20) établit quels fichiers de ce type existent ; le bloc « DOCUMENTS NOMMES DANS LA QUESTION » n'affirme « AUCUN » que s'il n'existe aucun fichier du type, sinon il liste les fichiers et laisse le modèle juger (règle 8). Le nom du projet est lu dans `core.projects` pour ne pas prendre « de CMP » pour un qualifiant. C7-004 est refusée ; SC4-002/SC4-003/SC8-005 (documents nommés avec nom de projet ou d'établissement) passent. Le CCAG, document de la couche application, est exclu de ce mécanisme jusqu'au Sprint 2 (résolution couche app avec les DTU). Traçabilité : colonne `rag.query_logs.named_documents`.
+
+#### Décisions
+
+- `baikal-retrieval` v2.1.0 en production (code jusqu'au commit `038242a` du repo Baikal ; migrations `rag_match_documents_v15` et `rag_query_logs_named_documents` appliquées).
+- Baselines figées dans git : `eval/reports/baseline-v2.1.0.*` et `baseline-v2.1.0-synth.*` (commit `7ba0c48`).
+- Prochaine étape : Sprint 2 (multi-documents S2.x, prompt du condenser, résolution couche application pour CCAG/DTU, faux positifs éventuels des types `plan`/`notice` à réactiver sur preuve des logs `named_documents`).
 
 ---
 
