@@ -215,12 +215,23 @@ git push origin master    # Auto-deploy Vercel
 
 ## 📌 État Courant
 
-**Date** : 2026-09-15
-**Branche** : `main`
-**RAG prod** : `baikal-retrieval` v2.1.0 — Sprint 1 clos, fusionné dans `main` du repo Baikal (commit de merge `51dc191`), puis reprise « documents nommés » jusqu'au commit `038242a`
+**Date** : 2026-09-20
+**Branche** : `main` (7 commits devant `origin/master` : docs RAG + code du chat Sprint 2 — `master` déclenche Vercel, non poussé)
+**RAG prod** : `baikal-retrieval` **v2.2.0** déployée le 2026-09-20 (repo Baikal, code jusqu'au commit `fc7ce91`, migration `rag_acces_retrieval` appliquée) — l'EF exige désormais un jeton utilisateur membre du projet (clé anon → 401)
+**Sprint 2** : code livré et déployé (voir section ci-dessous) ; **éval `s2-v2.2.0` et baseline v2.2.0 en attente** des clés `SUPABASE_SERVICE_ROLE_KEY` et `GEMINI_API_KEY` dans `eval/.env` du repo Baikal ; §7.4 de la spec à écrire avec les chiffres
 **Sprint 1** : FTS OR-isé (`match_documents_v15`), pondération couche application, condensation des suivis (condenser), gate agentique lisible, page (`page_start`, P11) corrigée, documents nommés (résolution scalable)
 **Résultats** : réel (35 q.) recall doc 97 %, critères 69 % (24/35), MRR 0,79, Page OK 71 %, p50 4,3 s, agentique 26 % — synthétique (60 q.) recall doc 98 %, critères 83 % (50/60), MRR 0,93, p50 2,9 s, agentique 8 %
-**Prochaine étape** : Sprint 2 (multi-documents, prompt du condenser, résolution couche application CCAG/DTU)
+**Prochaine étape** : rejouer le banc (`s2-v2.2.0`, `s2-v2.2.0-synth`), figer `baseline-v2.2.0`, écrire §7.4, décider S2.5 sur chiffres ; puis Sprint 3 (`llm_model` configurable, A/B modèles, Cohere sur preuve)
+
+### Sprint 2 RAG — 🚀 DÉPLOYÉ, ÉVAL EN ATTENTE (2026-09-17 → 20)
+
+> Plan (repo Baikal) : `docs/superpowers/plans/2026-09-19-sprint2-rag.md` — décisions d'Eric : sécurité en tâche 1, recherche ciblée sur chaque document nommé, comparaisons sur extraits par défaut, lecture intégrale à la demande (« Approfondir »).
+
+Backend (Baikal, `baikal-retrieval` v2.2.0) : identité lue dans le jeton + appartenance vérifiée par `rag.resolve_access` (parité RLS de `core.projects`, `app_id` pinné au profil), fonctions `rag` fermées à `anon`/`authenticated` (sauf `delete_conversation`/`close_conversation`) ; intent `comparison`/`synthesis`/`citation` de nouveau détecté (bug `safeRequiresSearch`) ; recherche ciblée par document nommé (`filter_file_ids`) fusionnée à la recherche globale ; `CCAG` résolu via la couche application, règle marché privé affinée ; condenser sans recopie de la réponse précédente ; boucle agentique à budget dédié, réponse texte streamée sans second appel, tolérante aux pannes ; `generation_mode: gemini` explicite → lecture intégrale des documents nommés.
+
+Frontend (ce repo, commits `163bd24` + `50f54d5`) : étapes agentiques stylées, trace « Recherche intelligente », bouton « Approfondir — lecture intégrale de … (~15 s) » (désactivé pendant un stream, masqué après une réponse Full Document), messages 401/403 lisibles. Types : `AgenticSummary`, `NamedDocumentRef` (`src/types/chat.types.ts`), payload `sources` : `agentic`, `named_documents`.
+
+Métrique « les deux documents cités » (`source_docs_all`, hors `ok_criteria`) recalculée sur la v2.1.0 : réel 3/4, synthétique 10/10 → l'échec C3 était dans la génération, pas dans le rappel. Cinq critères du set réel revus (C2-003, C3-001, C4-001, C6-003, C8-003), validés par Eric.
 
 ### Sprint 1 RAG — ✅ TERMINÉ (2026-09-13 → 15)
 
