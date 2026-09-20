@@ -19,6 +19,8 @@ export interface MessageBubbleProps {
   onVoteComplete?: (message: Message, voteType: 'up' | 'down', qaId?: string) => void
   /** Sprint 2 RAG — relance la question en lecture intégrale des documents nommés */
   onDeepen?: (message: Message) => void
+  /** Sprint 2 RAG — « Approfondir » grisé pendant qu'une réponse est en cours de génération */
+  deepenDisabled?: boolean
 }
 
 export function MessageBubble({
@@ -28,6 +30,7 @@ export function MessageBubble({
   activeProject,
   onVoteComplete,
   onDeepen,
+  deepenDisabled,
 }: MessageBubbleProps) {
   // Message utilisateur
   if (message.role === 'user') {
@@ -43,6 +46,7 @@ export function MessageBubble({
       activeProject={activeProject}
       onVoteComplete={onVoteComplete}
       onDeepen={onDeepen}
+      deepenDisabled={deepenDisabled}
     />
   )
 }

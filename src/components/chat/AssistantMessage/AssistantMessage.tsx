@@ -26,6 +26,8 @@ interface AssistantMessageProps {
   onVoteComplete?: (message: Message, voteType: 'up' | 'down', qaId?: string) => void
   /** Sprint 2 RAG — relance la question en lecture intégrale des documents nommés */
   onDeepen?: (message: Message) => void
+  /** Sprint 2 RAG — « Approfondir » grisé pendant qu'une réponse est en cours de génération */
+  deepenDisabled?: boolean
 }
 
 export function AssistantMessage({
@@ -35,6 +37,7 @@ export function AssistantMessage({
   activeProject,
   onVoteComplete,
   onDeepen,
+  deepenDisabled,
 }: AssistantMessageProps) {
   const { profile } = useAuth()
   const { openViewer } = useAppStore()
@@ -50,6 +53,11 @@ export function AssistantMessage({
 
   // Déterminer si le bouton down est actif
   const canVoteDown = Boolean(message.qa_memory_id)
+
+  // Sprint 2 RAG — trace de la recherche intelligente : `steps` peut manquer du payload SSE
+  // (réponse directe de l'orchestrateur, Phase B interrompue), `iterations` non.
+  const agenticSteps = message.agentic?.steps ?? []
+  const nSteps = agenticSteps.length
 
   /**
    * Handler délégué pour les citations inline [Document, Page X]
@@ -264,11 +272,11 @@ export function AssistantMessage({
           {/* Sprint 2 RAG — trace de la recherche intelligente */}
           {message.agentic && message.agentic.iterations > 0 && (
             <div className="mt-3 text-[11px] text-stone-400 dark:text-stone-500">
-              Recherche intelligente : {message.agentic.steps.length} recherche{message.agentic.steps.length > 1 ? 's' : ''}
+              Recherche intelligente : {nSteps} recherche{nSteps !== 1 ? 's' : ''}
               {message.agentic.timed_out ? ', budget épuisé' : ''}
-              {message.agentic.steps.length > 0 && (
+              {nSteps > 0 && (
                 <ul className="mt-1 space-y-0.5">
-                  {message.agentic.steps.map(s => (
+                  {agenticSteps.map(s => (
                     <li key={s.iteration}>· {s.result_summary}</li>
                   ))}
                 </ul>
@@ -278,7 +286,7 @@ export function AssistantMessage({
 
           {/* Sprint 2 RAG — Approfondir : lecture intégrale des documents nommés */}
           {onDeepen && message.generation_mode !== 'gemini' && (message.named_documents?.length ?? 0) > 0 && (
-            <DeepenButton namedDocuments={message.named_documents!} onClick={() => onDeepen(message)} />
+            <DeepenButton namedDocuments={message.named_documents!} disabled={deepenDisabled} onClick={() => onDeepen(message)} />
           )}
 
           {/* Erreur de vote */}

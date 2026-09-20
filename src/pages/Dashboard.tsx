@@ -331,6 +331,7 @@ export function Dashboard() {
                 activeProject={activeProject}
                 onVoteComplete={handleVoteComplete}
                 onDeepen={handleDeepen}
+                deepenDisabled={isAgentTyping}
               />
             )
           })}

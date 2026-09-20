@@ -220,6 +220,10 @@ export async function sendMessageStream(
       }
 
       if (!response.ok) {
+        // Sprint 2 RAG — l'EF refuse désormais en HTTP : un corps JSON technique n'aide
+        // personne, on traduit les deux refus attendus en message lisible.
+        if (response.status === 401) throw new Error('Session expirée, reconnectez-vous.')
+        if (response.status === 403) throw new Error('Accès refusé à ce projet.')
         const errorText = await response.text()
         throw new Error(`Erreur ${response.status}: ${errorText}`)
       }
