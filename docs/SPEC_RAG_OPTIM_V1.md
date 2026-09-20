@@ -381,6 +381,89 @@ Numéros d'article (C8) : 0/6 → 4/6. Croisements (C3) : 3/10 → 7/10.
 - Baselines figées dans git : `eval/reports/baseline-v2.1.0.*` et `baseline-v2.1.0-synth.*` (commit `7ba0c48`).
 - Prochaine étape : Sprint 2 (multi-documents S2.x, prompt du condenser, résolution couche application pour CCAG/DTU, faux positifs éventuels des types `plan`/`notice` à réactiver sur preuve des logs `named_documents`).
 
+### 7.4 Sprint 2 — résultats (2026-09-21, code jusqu'au commit `0887ab0` du repo Baikal)
+
+Rejeu complet des deux golden sets sur `baikal-retrieval` v2.2.0 déployée (accès vérifié par le jeton et `rag.resolve_access`, intents restaurés, recherche ciblée par document nommé, budget agentique dédié et réponse directe, condenser sans recopie, CCAG par la couche application, lecture intégrale à la demande). Rapports : `Frontend-Baikal/eval/reports/baseline-v2.2.0.md` et `baseline-v2.2.0-synth.md`, comparés à `baseline-v2.1.0.md` / `-synth.md` (§7.3). Plan exécuté : `Frontend-Baikal/docs/superpowers/plans/2026-09-19-sprint2-rag.md`.
+
+Trois passages du même code ont été joués sur le set réel (`s2-v2.2.0` avant les correctifs de niveaux, `s2b-v2.2.0`, puis `baseline-v2.2.0`) : critères 30/35, 29/35, 29/35 — la variance inter-runs de ±1 question annoncée au Sprint 1 se confirme ; C5-003 et C8-003 basculent d'un passage à l'autre.
+
+#### Réel (35 questions, golden set v1 — 5 critères révisés, validés par Eric le 2026-09-19)
+
+| Métrique | v2.1.0 | v2.2.0 |
+|---|---|---|
+| Recall documentaire | 97 % | 93 % (33/35 : C3-004 pré-existant, C5-003 variance — 97 % au rejeu `s2b`) |
+| Critères | 69 % (24/35) | 83 % (29/35), dont 4 par révision de critères (C2-003, C4-001, C6-003, C8-003) |
+| Les deux documents cités (C3, nouvelle métrique `source_docs_all`) | 75 % (3/4, recalculé sur le rapport v2.1.0) | 75 % (3/4) |
+| MRR | 0,79 | 0,805 |
+| Page OK (P11) | 71 % | 62 % |
+| p50 | 4,3 s | 3,9 s (3,3 s et 4,0 s aux deux autres passages) |
+| p95 | 12,6 s | 9,6 s |
+| Agentique | 26 % | 29 % |
+| C7 sentinelles | 4/4 | 3/4 (C7-004 refuse bien sur le fond — « Aucun fichier de CCTP portant spécifiquement sur le gros œuvre n'existe dans le projet » — mais la formulation échappe au motif du harnais, fenêtre de 60 caractères) |
+
+Par classe (critères, v2.1.0 → v2.2.0) :
+
+| Classe | v2.1.0 | v2.2.0 |
+|---|---|---|
+| C1 fait précis | 7/8 | 7/8 |
+| C2 info éclatée | 3/5 | 4/5 |
+| C3 croisement | 3/4 | 4/4 |
+| C4 synthèse | 2/4 | 4/4 |
+| C5 suivi implicite | 2/4 | 2/4 |
+| C6 norme / code | 2/3 | 3/3 |
+| C7 hors corpus | 4/4 | 3/4 |
+| C8 verbatim | 1/3 | 2/3 |
+
+Gains nominatifs : C2-003, C3-001, C4-001, C4-004, C6-003, C8-003. Perte nominative : C7-004 (harnais, voir ci-dessus).
+
+#### Synthétique (60 questions, golden set synthétique v1.2 + `source_docs_all` sur les 10 SC3)
+
+| Métrique | v2.1.0 | v2.2.0 |
+|---|---|---|
+| Recall documentaire | 98 % | 98 % |
+| Critères | 83 % (50/60) | 83 % (50/60) — mêmes 10 échecs |
+| Les deux documents cités (C3) | 100 % (recalculé) | 100 % |
+| MRR | 0,926 | 0,929 |
+| Page OK | 70 % | 77 % |
+| p50 | 2,9 s | 2,4 s |
+| p95 | 5,9 s | 5,4 s |
+| Agentique | 8 % | 5 % |
+| C7 hors corpus | 6/6 | 6/6 |
+
+Par classe : identique à v2.1.0 (C1 8/8, C2 5/6, C3 7/10, C4 5/6, C5 5/8, C6 10/10, C7 6/6, C8 4/6). Aucun gain ni perte nominatif.
+
+#### Classement des échecs restants — réel
+
+- **Harnais** : C7-004 (refus correct, motif `aucun (fichier|document)[^.]{0,60}(projet|corpus)` trop court — à élargir au Sprint 3 hors comparabilité).
+- **Génération (Sprint 3)** : C8-002 (l'agent trouve désormais l'article 2 du CCAG p.4 grâce au repli couche application de `search_in_file`, mais « acheteur » n'apparaît pas dans l'énumération) ; C1-002 (14 mois du Mémoire Technique p.29 retenus au lieu des 9 mois p.19 — arbitrage intra-document) ; C5-002 (« dans le ccap ? » réécrit correctement « Le marché est-il révisable d'après le CCAP ? », 6 extraits ciblés du CCAP, mais la page 12 est préférée à la page 9 « variation des prix ») ; C2-001 (VRD refusé alors que le CCTP p.55 est en sources).
+- **Variance** : C5-003 (réussi au passage `s2b`, perdu à la baseline).
+- **Corpus (Sprint 4)** : C3-004 (le CCTP TCE ne remonte jamais sur les limites de prestations entre lots ; seul le PGC répond).
+
+#### Classement des échecs restants — synthétique
+
+- **Génération avec les deux documents en sources (Sprint 3)** : SC3-006 (partie CR 41 : rangement/polystyrène), SC3-007 (délai de levée des réserves), SC3-010 (DTU 25.41 du lot 07 lu dans le lot 08), SC5-007, SC5-008 (pénalité 100 €), SC8-003 et SC8-006 (numéro de point ou de section non exploité).
+- **Détail dans un résumé** : SC2-006 (« auto-lissant »), SC4-006 (« dalles sur plots », mode intégral).
+- **Rappel** : SC5-005 (jours de gel du CR 41 : boucle agentique sans source).
+
+#### Enseignements du Sprint 2
+
+1. **Sécurité (fait établi, corrigé)** : jusqu'à la v2.1.0, la clé anon publique et des UUID arbitraires suffisaient à lire les documents de n'importe quel projet (`get_agent_context` sans contrôle d'appartenance, `match_documents_v15` SECURITY DEFINER exécutable par `anon` sur le schéma `rag` exposé). Depuis la migration `rag_acces_retrieval` (2026-09-20) et la v2.2.0 : identité lue dans le jeton, appartenance par `rag.resolve_access` (même prédicat que la RLS de `core.projects`), `app_id` pinné au profil, toutes les fonctions `rag` hors triggers fermées à `anon`/`authenticated` (sauf `delete_conversation`/`close_conversation`). Smoke : clé anon → 401, non-membre → 403. Le banc s'authentifie en `service_role`. Piège rencontré : les variables `SUPABASE_*_KEY` injectées dans l'Edge Function ne sont plus les JWT legacy que les clients envoient — le rôle se lit dans la claim `role` du JWT (signature vérifiée par la passerelle, `verify_jwt = true`).
+2. **Intents** : `comparison`/`synthesis`/`citation` n'atteignaient jamais la production (0 `comparison` sur 576 requêtes journalisées : `safeRequiresSearch` rétrogradait toute question avec un mot interrogatif). Restaurés, ils ont d'abord fait disparaître le Mémoire Technique de Bessières (aucun chunk L0 : recall 87 % au premier passage) — les stratégies `synthesis`/`comparison` cherchent désormais en L0 + L1, la recherche ciblée toujours en L0 + L1. Quatre fichiers Bessières n'ont pas de L0 (AE DBC, DBC = Mémoire Technique, PGC, RICT) : ré-ingestion au Sprint 4. Les motifs d'intent sont bornés en début de mot (« représente » ≠ « présente »).
+3. **Recherche ciblée par document nommé** : sur les 327 requêtes des campagnes, 155 nommaient un document et 142 ont reçu des extraits ciblés (1 115 extraits). C3 réel 4/4 aux critères, 3/4 aux deux documents cités (C3-004 = corpus). Sur le synthétique, les deux documents étaient déjà dans les sources dans 10 cas sur 10 en v2.1.0 : l'échec C3 est dans la génération (gpt-4o-mini n'exploite qu'un document), pas dans le rappel — c'est le sujet du Sprint 3.
+4. **Boucle agentique** : 39 déclenchements sur 327 requêtes, 39 réponses directes (S2.2 : plus de seconde génération), aucun budget épuisé (S2.1), aucune erreur ; `search_in_file` voit la couche application (C8-002 trouve le CCAG). S2.5 (`max_iterations: 4` pour les comparaisons) sans objet : la boucle n'est déclenchée sur aucune question C3.
+5. **Condenser** : 26 réécritures (~1,0 s chacune), plus aucune recopie de la réponse précédente observée ; C5-003 gagné puis perdu (variance), C5-002 reste un problème de choix d'extrait.
+6. **Juge de fidélité** : premier passage possible (clé Gemini posée). Résultats instables entre deux passages du même code (C2 0,85 → 0,61 ; C5 0,75 → 0,25 ; C1 0,88 → 0,83) et non significatifs pour C4 (mode intégral : le juge ne voit que les extraits) et C7 (refus). À moyenner sur trois passages, sur extraits seulement, avant d'en faire un critère. Rapports enrichis : `baseline-v2.1.0.judged.json`, `baseline-v2.2.0.judged.json`.
+7. **Latence** : p50 −0,4 s (réel) et −0,5 s (synthétique) ; le contrôle d'accès coûte ~0 ms en `service_role` et un aller-retour GoTrue pour un utilisateur (à lire dans `timings.auth` en production).
+8. **Méthode** : sans le rejeu après lecture des échecs, la v2.2.0 aurait été figée avec la régression du Mémoire Technique — la lecture par classe et par question reste la règle, jamais le chiffre global seul.
+
+#### Décisions
+
+- `baikal-retrieval` v2.2.0 en production (code jusqu'au commit `0887ab0` du repo Baikal ; migration `rag_acces_retrieval` appliquée le 2026-09-20 ; correctifs auth par claim, niveaux L0 + L1 et intents bornés déployés le 2026-09-21).
+- Baselines figées dans git : `eval/reports/baseline-v2.2.0.*` et `baseline-v2.2.0-synth.*` (+ `.judged.json`).
+- S2.5 : aucun changement de `max_iterations`.
+- Frontend ARPET (bouton « Approfondir », étapes agentiques, messages 401/403) sur `main` ; la mise en production (`master`, Vercel) est à la décision d'Eric.
+- Prochaine étape : Sprint 3 — S3.1 `llm_model` configurable, S3.2 A/B gpt-4.1-mini / gemini-2.5-flash sur les échecs de génération listés ci-dessus (C3 synthétique, C1-002, C5-002, C8-002), S3.3 Cohere seulement sur preuve ; Sprint 4 — L0 des quatre fichiers Bessières, ré-ingestion CCAG/NFP03-001, QQOQCCP → FTS ; harnais — élargir le motif de refus, moyenner le juge sur trois passages.
+
 ---
 
 *Document généré à partir de l'audit du 2026-06-12 (lecture complète de `baikal-retrieval` v2.0.0, de `rag.match_documents_v14` en production, de la config live `config.agent_prompts` et des statistiques du corpus).*

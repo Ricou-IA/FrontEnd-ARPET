@@ -215,15 +215,17 @@ git push origin master    # Auto-deploy Vercel
 
 ## 📌 État Courant
 
-**Date** : 2026-09-20
+**Date** : 2026-09-21
 **Branche** : `main` (7 commits devant `origin/master` : docs RAG + code du chat Sprint 2 — `master` déclenche Vercel, non poussé)
-**RAG prod** : `baikal-retrieval` **v2.2.0** déployée le 2026-09-20 (repo Baikal, code jusqu'au commit `fc7ce91`, migration `rag_acces_retrieval` appliquée) — l'EF exige désormais un jeton utilisateur membre du projet (clé anon → 401)
-**Sprint 2** : code livré et déployé (voir section ci-dessous) ; **éval `s2-v2.2.0` et baseline v2.2.0 en attente** des clés `SUPABASE_SERVICE_ROLE_KEY` et `GEMINI_API_KEY` dans `eval/.env` du repo Baikal ; §7.4 de la spec à écrire avec les chiffres
+**RAG prod** : `baikal-retrieval` **v2.2.0** — Sprint 2 clos ; code jusqu'au commit `0887ab0` du repo Baikal (déploiements des 2026-09-20 et 21 : sécurité, hotfix auth par claim JWT, niveaux L0 + L1, intents bornés), migration `rag_acces_retrieval` appliquée — l'EF exige un jeton utilisateur membre du projet (clé anon → 401)
+**Sprint 2** : ✅ terminé — baseline v2.2.0 figée (§7.4). Réel (35 q.) : recall doc 93 % (97 % au rejeu), critères 83 % (29/35, dont 4 par critères révisés), C3 4/4, MRR 0,805, p50 3,9 s, agentique 29 % — synthétique (60 q.) : recall 98 %, critères 83 % (50/60, inchangé), les deux documents cités 100 %, p50 2,4 s, agentique 5 %
 **Sprint 1** : FTS OR-isé (`match_documents_v15`), pondération couche application, condensation des suivis (condenser), gate agentique lisible, page (`page_start`, P11) corrigée, documents nommés (résolution scalable)
 **Résultats** : réel (35 q.) recall doc 97 %, critères 69 % (24/35), MRR 0,79, Page OK 71 %, p50 4,3 s, agentique 26 % — synthétique (60 q.) recall doc 98 %, critères 83 % (50/60), MRR 0,93, p50 2,9 s, agentique 8 %
-**Prochaine étape** : rejouer le banc (`s2-v2.2.0`, `s2-v2.2.0-synth`), figer `baseline-v2.2.0`, écrire §7.4, décider S2.5 sur chiffres ; puis Sprint 3 (`llm_model` configurable, A/B modèles, Cohere sur preuve)
+**Prochaine étape** : Sprint 3 (`llm_model` configurable, A/B gpt-4.1-mini / gemini-2.5-flash sur les échecs de génération C3/C1-002/C5-002/C8-002, Cohere sur preuve) ; Sprint 4 corpus (L0 des 4 fichiers Bessières, CCAG/NFP03-001, QQOQCCP → FTS) ; push `master` ARPET à décider (chat Sprint 2)
 
-### Sprint 2 RAG — 🚀 DÉPLOYÉ, ÉVAL EN ATTENTE (2026-09-17 → 20)
+### Sprint 2 RAG — ✅ TERMINÉ (2026-09-17 → 21)
+
+> Résultats détaillés : `docs/SPEC_RAG_OPTIM_V1.md` §7.4
 
 > Plan (repo Baikal) : `docs/superpowers/plans/2026-09-19-sprint2-rag.md` — décisions d'Eric : sécurité en tâche 1, recherche ciblée sur chaque document nommé, comparaisons sur extraits par défaut, lecture intégrale à la demande (« Approfondir »).
 
@@ -231,7 +233,7 @@ Backend (Baikal, `baikal-retrieval` v2.2.0) : identité lue dans le jeton + appa
 
 Frontend (ce repo, commits `163bd24` + `50f54d5`) : étapes agentiques stylées, trace « Recherche intelligente », bouton « Approfondir — lecture intégrale de … (~15 s) » (désactivé pendant un stream, masqué après une réponse Full Document), messages 401/403 lisibles. Types : `AgenticSummary`, `NamedDocumentRef` (`src/types/chat.types.ts`), payload `sources` : `agentic`, `named_documents`.
 
-Métrique « les deux documents cités » (`source_docs_all`, hors `ok_criteria`) recalculée sur la v2.1.0 : réel 3/4, synthétique 10/10 → l'échec C3 était dans la génération, pas dans le rappel. Cinq critères du set réel revus (C2-003, C3-001, C4-001, C6-003, C8-003), validés par Eric.
+Métrique « les deux documents cités » (`source_docs_all`, hors `ok_criteria`) : réel 3/4 (C3-004 = corpus), synthétique 10/10 en v2.1.0 comme en v2.2.0 → l'échec C3 restant est dans la génération (gpt-4o-mini), sujet du Sprint 3. Cinq critères du set réel revus (C2-003, C3-001, C4-001, C6-003, C8-003), validés par Eric. Enseignement de méthode : le premier passage v2.2.0 perdait le Mémoire Technique (aucun chunk L0, stratégies en L0 seul) — corrigé (L0 + L1) avant de figer la baseline.
 
 ### Sprint 1 RAG — ✅ TERMINÉ (2026-09-13 → 15)
 
