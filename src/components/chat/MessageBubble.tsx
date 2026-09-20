@@ -17,6 +17,8 @@ export interface MessageBubbleProps {
   activeProject?: { id: string; org_id: string } | null
   /** Callback après vote réussi */
   onVoteComplete?: (message: Message, voteType: 'up' | 'down', qaId?: string) => void
+  /** Sprint 2 RAG — relance la question en lecture intégrale des documents nommés */
+  onDeepen?: (message: Message) => void
 }
 
 export function MessageBubble({
@@ -25,6 +27,7 @@ export function MessageBubble({
   projectId,
   activeProject,
   onVoteComplete,
+  onDeepen,
 }: MessageBubbleProps) {
   // Message utilisateur
   if (message.role === 'user') {
@@ -39,6 +42,7 @@ export function MessageBubble({
       projectId={projectId}
       activeProject={activeProject}
       onVoteComplete={onVoteComplete}
+      onDeepen={onDeepen}
     />
   )
 }

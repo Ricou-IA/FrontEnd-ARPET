@@ -152,5 +152,7 @@ export function mapSSESourcesPayload(payload: SSESourcesPayload): Partial<ChatRe
     cache_type: payload.cache_type,
     answer_format: payload.answer_format,
     timings: payload.timings,
+    agentic: payload.agentic ?? null,
+    named_documents: payload.named_documents ?? [],
   }
 }

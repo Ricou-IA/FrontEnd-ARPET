@@ -16,6 +16,7 @@ import { KnowledgeHeader } from './KnowledgeHeader'
 import { SourcesList } from './SourcesList'
 import { CopyButton } from './CopyButton'
 import { VoteButtons } from './VoteButtons'
+import { DeepenButton } from './DeepenButton'
 
 interface AssistantMessageProps {
   message: Message
@@ -23,6 +24,8 @@ interface AssistantMessageProps {
   projectId?: string | null
   activeProject?: { id: string; org_id: string } | null
   onVoteComplete?: (message: Message, voteType: 'up' | 'down', qaId?: string) => void
+  /** Sprint 2 RAG — relance la question en lecture intégrale des documents nommés */
+  onDeepen?: (message: Message) => void
 }
 
 export function AssistantMessage({
@@ -31,6 +34,7 @@ export function AssistantMessage({
   projectId,
   activeProject,
   onVoteComplete,
+  onDeepen,
 }: AssistantMessageProps) {
   const { profile } = useAuth()
   const { openViewer } = useAppStore()
@@ -256,6 +260,26 @@ export function AssistantMessage({
             responseContent={message.content}
             onOpenViewer={openViewer}
           />
+
+          {/* Sprint 2 RAG — trace de la recherche intelligente */}
+          {message.agentic && message.agentic.iterations > 0 && (
+            <div className="mt-3 text-[11px] text-stone-400 dark:text-stone-500">
+              Recherche intelligente : {message.agentic.steps.length} recherche{message.agentic.steps.length > 1 ? 's' : ''}
+              {message.agentic.timed_out ? ', budget épuisé' : ''}
+              {message.agentic.steps.length > 0 && (
+                <ul className="mt-1 space-y-0.5">
+                  {message.agentic.steps.map(s => (
+                    <li key={s.iteration}>· {s.result_summary}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {/* Sprint 2 RAG — Approfondir : lecture intégrale des documents nommés */}
+          {onDeepen && message.generation_mode !== 'gemini' && (message.named_documents?.length ?? 0) > 0 && (
+            <DeepenButton namedDocuments={message.named_documents!} onClick={() => onDeepen(message)} />
+          )}
 
           {/* Erreur de vote */}
           {voteError && (

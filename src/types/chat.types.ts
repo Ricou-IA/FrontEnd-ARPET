@@ -65,6 +65,30 @@ export interface VoteContext {
   source_ids: (string | undefined)[];  // Rétro-compat avec code existant
 }
 
+/** Sprint 2 RAG — trace de la boucle agentique (payload `agentic` de l'événement sources) */
+export interface AgenticSummary {
+  iterations: number;
+  timed_out: boolean;
+  direct_answer?: boolean;
+  steps: Array<{
+    iteration: number;
+    tool_call: { name: string; args: Record<string, unknown> };
+    result_summary: string;
+    chunks_found: number;
+    elapsed_ms: number;
+  }>;
+}
+
+/** Sprint 2 RAG — document nommé dans la question, résolu sur les fichiers du projet */
+export interface NamedDocumentRef {
+  phrase: string;
+  status: 'found' | 'not_found' | 'no_candidate' | string;
+  found: string[];
+  file_ids: string[];
+  layer: string | null;
+  targeted_chunks: number;
+}
+
 /**
  * Message (v6 - avec mémoire collective)
  */
@@ -91,6 +115,10 @@ export interface Message {
   generation_mode?: GenerationMode;
   generation_mode_ui?: string;  // "Full Document", "RAG Chunks", "Mémoire Collective"
   cache_status?: 'hit' | 'miss' | 'none';
+
+  // Sprint 2 RAG
+  agentic?: AgenticSummary | null;
+  named_documents?: NamedDocumentRef[];
 
   // =============================================
   // v6: MÉMOIRE COLLECTIVE

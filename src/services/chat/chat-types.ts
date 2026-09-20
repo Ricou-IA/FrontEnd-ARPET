@@ -8,6 +8,8 @@ import type {
   AgentSource,
   VoteContext
 } from '../../types'
+// Sprint 2 RAG — importés directement depuis chat.types (pas encore réexportés par le barrel '../../types')
+import type { AgenticSummary, NamedDocumentRef } from '../../types/chat.types'
 
 // ============================================================
 // CONFIGURATION — RAG Endpoint (fixe : baikal-retrieval)
@@ -127,6 +129,8 @@ export interface ChatResponse {
   cache_type?: string
   answer_format?: string
   timings?: Record<string, number>
+  agentic?: AgenticSummary | null
+  named_documents?: NamedDocumentRef[]
 }
 
 export interface ChatResult {
@@ -186,6 +190,8 @@ export interface SSESourcesPayload {
   answer_format?: string
   query_rewritten?: boolean
   timings?: Record<string, number>
+  agentic?: AgenticSummary | null
+  named_documents?: NamedDocumentRef[]
 }
 
 export type OnTokenCallback = (token: string) => void

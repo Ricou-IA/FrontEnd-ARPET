@@ -19,6 +19,8 @@ interface StepsIndicatorProps {
 function StepsIndicator({ steps, isComplete }: StepsIndicatorProps) {
     if (steps.length === 0) return null
 
+    const isAgentStep = (s: string) => s === 'agentic_start' || s.startsWith('agent_')
+
     return (
         <div className="flex flex-col gap-2 mb-4">
             {steps.map((step, index) => {
@@ -31,10 +33,11 @@ function StepsIndicator({ steps, isComplete }: StepsIndicatorProps) {
                         className={`
                             flex items-center gap-2 text-[11px] transition-all duration-300
                             ${isDone ? 'text-stone-400 dark:text-stone-500' : 'text-stone-600 dark:text-stone-300'}
+                            ${isAgentStep(step.step) ? 'ml-5' : ''}
                         `}
                     >
                         {/* Icône : check si terminé, spinner si en cours */}
-                        <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 ${isDone ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-stone-100 dark:bg-stone-800'}`}>
+                        <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 ${isDone ? 'bg-emerald-50 dark:bg-emerald-900/20' : (isAgentStep(step.step) ? 'bg-violet-50 dark:bg-violet-900/20' : 'bg-stone-100 dark:bg-stone-800')}`}>
                             {isDone ? (
                                 <svg
                                     className="w-2.5 h-2.5 text-emerald-500"
@@ -50,7 +53,7 @@ function StepsIndicator({ steps, isComplete }: StepsIndicatorProps) {
                                     />
                                 </svg>
                             ) : (
-                                <div className="w-2 h-2 rounded-full border-2 border-stone-300 border-t-stone-600 animate-spin" />
+                                <div className={`w-2 h-2 rounded-full border-2 border-stone-300 ${isAgentStep(step.step) ? 'border-t-violet-500' : 'border-t-stone-600'} animate-spin`} />
                             )}
                         </div>
 

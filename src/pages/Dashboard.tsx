@@ -105,7 +105,7 @@ export function Dashboard() {
   }
 
   // Envoyer un message avec streaming
-  const handleSendMessage = async (content: string, _files?: File[], deepAnalysis?: boolean) => {
+  const handleSendMessage = async (content: string, _files?: File[], deepAnalysis?: boolean, options?: { generation_mode?: 'gemini' }) => {
     if (!content.trim()) return
 
     if (deepAnalysis && _files && _files.length > 0) {
@@ -155,6 +155,7 @@ export function Dashboard() {
           project_id: activeProject?.id || null,
           conversation_id: currentConversationId,
           enable_suggestions: enableSuggestions,
+          generation_mode: options?.generation_mode ?? 'auto',
         },
         {
           // Callback pour les étapes
@@ -235,6 +236,8 @@ export function Dashboard() {
               generation_mode: receivedMetadata.generation_mode,
               generation_mode_ui: receivedMetadata.generation_mode_ui,
               cache_status: receivedMetadata.cache_status,
+              agentic: receivedMetadata.agentic ?? null,
+              named_documents: receivedMetadata.named_documents ?? [],
 
               can_vote: true,
               vote_context: {
@@ -294,6 +297,13 @@ export function Dashboard() {
     handleSendMessage(suggestion.text)
   }
 
+  // Sprint 2 RAG — « Approfondir » : même question, lecture intégrale des documents nommés
+  const handleDeepen = (message: Message) => {
+    const question = message.vote_context?.question
+    if (!question || isAgentTyping) return
+    handleSendMessage(question, undefined, undefined, { generation_mode: 'gemini' })
+  }
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
@@ -320,6 +330,7 @@ export function Dashboard() {
                 projectId={activeProject?.id}
                 activeProject={activeProject}
                 onVoteComplete={handleVoteComplete}
+                onDeepen={handleDeepen}
               />
             )
           })}
