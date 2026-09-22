@@ -77,6 +77,7 @@ export interface AgenticSummary {
     chunks_found: number;
     elapsed_ms: number;
   }>;
+  error?: string;
 }
 
 /** Sprint 2 RAG — document nommé dans la question, résolu sur les fichiers du projet */
