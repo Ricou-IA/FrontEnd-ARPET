@@ -215,13 +215,26 @@ git push origin master    # Auto-deploy Vercel
 
 ## 📌 État Courant
 
-**Date** : 2026-09-21
-**Branche** : `main` (7 commits devant `origin/master` : docs RAG + code du chat Sprint 2 — `master` déclenche Vercel, non poussé)
-**RAG prod** : `baikal-retrieval` **v2.2.0** — Sprint 2 clos ; code jusqu'au commit `0887ab0` du repo Baikal (déploiements des 2026-09-20 et 21 : sécurité, hotfix auth par claim JWT, niveaux L0 + L1, intents bornés), migration `rag_acces_retrieval` appliquée — l'EF exige un jeton utilisateur membre du projet (clé anon → 401)
+**Date** : 2026-09-23
+**Branche** : `main` (`master` poussé le 2026-09-21 pour le chat Sprint 2 ; `main` est maintenant en avance sur `origin/master` des docs de Sprint 3 et du commit `53be574` (`AgenticSummary.error?`) — pousser `master` reste la décision d'Eric)
+**RAG prod** : `baikal-retrieval` **v2.3.0** — Sprint 3 clos ; code jusqu'au commit `aabc304` du repo Baikal, déployé le 2026-09-23, migration `rag_librarian_llm_model` appliquée (`llm_model = gpt-4o-mini` explicite en base)
+**Sprint 3** : ✅ terminé — deux candidats mesurés (gpt-4.1-mini, gemini-2.5-flash) contre gpt-4o-mini sur les deux golden sets (critères, fidélité, latence, coût). gpt-4o-mini reste retenu (gemini-2.5-flash à parité de critères mais boucle sur un caractère dans 3-6 % des réponses sans réflexion, coût ×3) ; Cohere prêt mais dormant faute de `COHERE_API_KEY`. Baseline v2.3.0 (§7.5) : réel 80 % (28/35), recall 93 %, p50 4,24 s, coût 0,0021 $/requête — synthétique 83 % (50/60), recall 96 %, p50 2,93 s, coût 0,0016 $/requête
 **Sprint 2** : ✅ terminé — baseline v2.2.0 figée (§7.4). Réel (35 q.) : recall doc 93 % (97 % au rejeu), critères 83 % (29/35, dont 4 par critères révisés), C3 4/4, MRR 0,805, p50 3,9 s, agentique 29 % — synthétique (60 q.) : recall 98 %, critères 83 % (50/60, inchangé), les deux documents cités 100 %, p50 2,4 s, agentique 5 %
 **Sprint 1** : FTS OR-isé (`match_documents_v15`), pondération couche application, condensation des suivis (condenser), gate agentique lisible, page (`page_start`, P11) corrigée, documents nommés (résolution scalable)
 **Résultats** : réel (35 q.) recall doc 97 %, critères 69 % (24/35), MRR 0,79, Page OK 71 %, p50 4,3 s, agentique 26 % — synthétique (60 q.) recall doc 98 %, critères 83 % (50/60), MRR 0,93, p50 2,9 s, agentique 8 %
-**Prochaine étape** : Sprint 3 (`llm_model` configurable, A/B gpt-4.1-mini / gemini-2.5-flash sur les échecs de génération C3/C1-002/C5-002/C8-002, Cohere sur preuve) ; Sprint 4 corpus (L0 des 4 fichiers Bessières, CCAG/NFP03-001, QQOQCCP → FTS) ; push `master` ARPET à décider (chat Sprint 2)
+**Prochaine étape** : Sprint 4 — corpus (L0 des 4 fichiers Bessières, ré-ingestion CCAG/NFP03-001, QQOQCCP → FTS) ; re-mesurer gemini-2.5-flash avec un budget de réflexion configurable ; activer Cohere dès que `COHERE_API_KEY` est posée
+
+### Sprint 3 RAG — ✅ TERMINÉ (2026-09-22 → 23)
+
+> Résultats détaillés : `docs/SPEC_RAG_OPTIM_V1.md` §7.5
+
+> Plan (repo Baikal) : `docs/superpowers/plans/2026-09-23-sprint3-rag.md` — décisions d'Eric : mesurer les deux candidats (gpt-4.1-mini ET gemini-2.5-flash), budget de latence +1 s au p50 maximum, Cohere seulement sur preuve (C1-002/C5-002/SC2-006/SC5-005 en échec après le choix du modèle), aller de bout en bout (migration, déploiement et push sans re-validation).
+
+Backend (repo Baikal) : `llm_model` configurable en base (fournisseur déduit du nom du modèle), génération Gemini sur extraits avec réflexion coupée, dispatch OpenAI/Gemini avec repli OpenAI gpt-4o-mini, tokens captés sur chaque appel de génération (coût par requête), `eval_overrides.llm_model` en service_role pour l'A/B sans toucher la config de prod, reranker Cohere prêt et testé (extraits ciblés préservés, gate agentique lue avant rerank) mais toujours dormant (`enable_reranking: false`), garde contre les boucles de répétition de gemini-2.5-flash (`counts.runaway`). Décision : gpt-4o-mini reste (migration `rag_librarian_llm_model`) ; Cohere différé faute de `COHERE_API_KEY`.
+
+Frontend (ce repo) : un seul changement, `AgenticSummary.error?` optionnel (`src/types/chat.types.ts`, commit `53be574`) pour tolérer le repli de la Phase B tracé côté payload.
+
+Enseignement de méthode : le juge de fidélité est déterministe à T=0 (l'instabilité constatée au Sprint 2 venait de la variance des réponses entre campagnes, pas du juge) ; gemini-2.5-flash sans réflexion peut dégénérer en boucle de répétition sur un caractère — un défaut nouveau que la garde générique détecte et coupe, sans le corriger.
 
 ### Sprint 2 RAG — ✅ TERMINÉ (2026-09-17 → 21)
 

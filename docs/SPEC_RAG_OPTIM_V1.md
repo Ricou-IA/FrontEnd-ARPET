@@ -464,6 +464,94 @@ Par classe : identique à v2.1.0 (C1 8/8, C2 5/6, C3 7/10, C4 5/6, C5 5/8, C6 10
 - Frontend ARPET (bouton « Approfondir », étapes agentiques, messages 401/403) sur `main` ; la mise en production (`master`, Vercel) est à la décision d'Eric.
 - Prochaine étape : Sprint 3 — S3.1 `llm_model` configurable, S3.2 A/B gpt-4.1-mini / gemini-2.5-flash sur les échecs de génération listés ci-dessus (C3 synthétique, C1-002, C5-002, C8-002), S3.3 Cohere seulement sur preuve ; Sprint 4 — L0 des quatre fichiers Bessières, ré-ingestion CCAG/NFP03-001, QQOQCCP → FTS ; harnais — élargir le motif de refus, moyenner le juge sur trois passages.
 
+### 7.5 Sprint 3 — résultats (2026-09-23, code jusqu'au commit aabc304 du repo Baikal, migration rag_librarian_llm_model)
+
+Sprint 3 rend le modèle de génération sur extraits configurable en base (`parameters.generation.llm_model`, fournisseur déduit du nom du modèle), mesure deux candidats (gpt-4.1-mini, gemini-2.5-flash) contre gpt-4o-mini sur les deux golden sets, capte les tokens de chaque appel de génération pour documenter le coût par requête, prépare le reranking Cohere sans l'activer, et élargit le harnais (motif de refus, juge de fidélité sur plusieurs passages). Plan exécuté : `Frontend-Baikal/docs/superpowers/plans/2026-09-23-sprint3-rag.md`. Rapports : `Frontend-Baikal/eval/reports/baseline-v2.3.0.md` et `baseline-v2.3.0-synth.md` (+ campagnes intermédiaires `s3-v2.3.0-*`, gitignorées).
+
+Modules livrés (repo Baikal, `supabase/functions/baikal-retrieval/`) : `generation/usage.ts` (capture des tokens), `generation/gemini-chunks.ts` (génération Gemini sur extraits, réflexion coupée), `generation/chunks.ts` (dispatch OpenAI/Gemini par fournisseur, repli OpenAI gpt-4o-mini), `eval-overrides.ts` (surcharge `llm_model` en service_role seulement), `eval/rescore-refusals.ts`. Le reranker Cohere marque désormais les extraits ciblés (`ChunkResult.targeted`, `mergeTargeted`) et les préserve d'une troncature (`keepTargetedFirst`, `candidateCount`) ; le flag `enable_reranking` reste à `false` (`features` NULL en base). `rag.query_logs.model` porte le modèle effectif et `counts.tokens_in/tokens_out/llm_calls/runaway` ; le payload SSE `sources` porte `model`, `usage` et `metrics.decisions.generation_runaway`. Tests : 152 EF (`deno test -A supabase/functions/baikal-retrieval/`), 10 banc (`deno test eval/`), `deno check` 0 erreur.
+
+#### Campagnes A/B des candidats (réel et synthétique)
+
+Coûts calculés sur la génération seule, grille de prix `PRICES_DEFAULT` (**prix des pages tarifs publiques au 2026-09 — hypothèse, à vérifier par Eric**). Les colonnes « Critères v3 » appliquent le motif de refus v3 (voir Enseignements #5) ; la colonne « Critères (rapport) » reste calculée avec le motif en vigueur au moment de chaque campagne et n'est donc pas strictement comparable entre lignes sur le seul critère C7.
+
+| Rapport | Set | Critères (rapport) | Critères v3 (rescore C7) | Recall | Tous docs C3 | MRR | p50 | p95 | Coût/req | Tokens in/out | Agentique | Fidélité (juge, extraits) | Citations |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| baseline-v2.2.0 (gpt-4o-mini) | réel 35 | 83 % (29) | 30/35 | 93 % | 3/4 | 0,805 | 3,86 s | 9,6 s | n/m (≈0,0015 $ estimé : 8 600 in × 0,15 + 300 out × 0,60) | n/m | 29 % | 0,577 (n=27) | 0,706 |
+| s3-v2.3.0-gpt41 | réel | 80 % (28) | 29/35 | 97 % | 3/4 | 0,816 | 5,96 s | 22,0 s | 0,0041 $ | 10 688 / 570 | 23 % | 0,638 (n=28) | 0,755 |
+| s3-v2.3.0-flash | réel | 86 % (30) | 31/35 | 93 % | 3/4 | 0,805 | 4,47 s | 12,4 s | 0,0043 $ | 10 922 / 667 | 26 % | 0,653 (n=28) | 0,721 |
+| baseline-v2.2.0-synth | synth 60 | 83 % (50) | 50/60 | 98 % | 10/10 | 0,929 | 2,41 s | 5,4 s | n/m | n/m | 5 % | 0,705 (n=46) | 0,777 |
+| s3-v2.3.0-gpt41-synth | synth | 83 % (50) | 52/60 | 98 % | 10/10 | 0,929 | 3,32 s | 21,7 s | 0,0039 $ | 10 124 / 382 | 5 % | 0,628 (n=48) | 0,663 |
+| s3-v2.3.0-flash-synth (sans garde) | synth | 80 % (48) | 48/60 | 100 % | 10/10 | 0,938 | 3,31 s | 23,8 s | 0,0047 $ | 10 417 / 829 | 7 % | 0,696 (n=46) | 0,773 |
+| s3b-v2.3.0-flash-synth (garde blancs) | synth | 78 % (47) | — | 100 % | 10/10 | 0,948 | 3,09 s | 13,9 s | 0,0046 $ | 10 679 / 738 | 3 % | — | — |
+| s3c-v2.3.0-flash-synth (garde générique) | synth | 82 % (49) | 49/60 | 100 % | 10/10 | 0,948 | 3,19 s | 10,7 s | 0,0041 $ | 10 575 / 583 | 5 % | — | — |
+
+Par classe (critères, rapport) :
+- Réel : baseline C1 88 %/C2 80 %/C3 100 %/C4 100 %/C5 50 %/C6 100 %/C7 75 %/C8 67 % ; gpt-4.1-mini identique sauf C4 75 % ; gemini-2.5-flash identique sauf C5 75 %.
+- Synthétique : baseline C1 100 %/C2 83 %/C3 70 %/C4 83 %/C5 63 %/C6 100 %/C7 100 %/C8 67 % ; gpt-4.1-mini : C5 88 %, C7 67 % (harnais) ; gemini-2.5-flash (s3c, garde générique) : C3 40 % (boucles), C5 100 %, C6 90 %, C7 100 %.
+
+#### Baseline v2.3.0 vs v2.2.0 — réel (35 questions)
+
+| Métrique | v2.2.0 | v2.3.0 |
+|---|---|---|
+| Critères | 83 % (29/35) | 80 % (28/35 ; identique avec le motif de refus v3) |
+| Recall documentaire | 93 % | 93 % |
+| Les deux documents cités (C3) | 3/4 | 3/4 |
+| MRR | 0,805 | 0,805 |
+| p50 | 3,9 s | 4,24 s |
+| p95 | 9,6 s | 12,6 s |
+| Agentique | 29 % | 29 % |
+| Coût moyen par requête (génération seule) | n/m (≈0,0015 $ estimé) | 0,0021 $ |
+| Tokens in/out | n/m | 10 331 / 341 |
+| Fidélité (juge, extraits) | 0,577 (n=27) | 0,632 (n=23) |
+| Citations | 0,706 | 0,884 |
+| Erreurs banc | — | 0 |
+
+Échecs v2.3.0 (28/35, contre 29/35 en v2.2.0 — écart dans la variance ±1-2 déjà constatée aux sprints précédents) : C1-002, C2-001, C3-004 (corpus), C4-004 (« 30 mars 2021 », variance), C5-002, C5-003 (agentique, variance), C8-002 (agentique), C8-003 (variance) ; C4-004 et C8-003 basculent d'un passage à l'autre, C5-003 était déjà instable au Sprint 2.
+
+#### Baseline v2.3.0 vs v2.2.0 — synthétique (60 questions)
+
+| Métrique | v2.2.0 | v2.3.0 |
+|---|---|---|
+| Critères | 83 % (50/60) | 83 % (50/60) — mêmes 10 échecs |
+| Recall documentaire | 98 % | 96 % |
+| Les deux documents cités (C3) | 100 % (10/10) | 100 % (10/10) |
+| MRR | 0,929 | 0,901 |
+| p50 | 2,4 s | 2,93 s |
+| p95 | 5,4 s | 12,8 s |
+| Agentique | 5 % | 5 % |
+| Coût moyen par requête | n/m | 0,0016 $ |
+| Tokens in/out | n/m | 9 905 / 279 |
+| Fidélité (juge, extraits) | 0,705 (n=46) | 0,673 (n=44) |
+| Citations | 0,777 | 0,750 |
+| Erreurs banc | 0 | 1 (voir note) |
+
+Échecs v2.3.0 : SC2-006 (erreur du banc, pas de l'EF — timeout du harnais à 90 000 ms alors que la latence mesurée est de 1 423 s et que l'EF a répondu en 5,2 s, `query_logs` id 1314, poste client probablement en veille ; SC2-006 échouait déjà sur « auto-lissant » indépendamment de cette erreur), SC3-006/007/010, SC4-006, SC5-005, SC5-007, SC5-008, SC8-003, SC8-006 — identiques aux 10 échecs de v2.2.0.
+
+#### Classement des échecs restants
+
+- **Génération** (sources correctes en entrée, réponse insuffisante avec gpt-4o-mini) : C1-002, C2-001, C5-002, C8-002 (agentique), SC3-006/007/010, SC5-005, SC8-003/006, SC2-006 (sur le fond), SC4-006.
+- **Choix d'extrait** (auraient justifié la gate Cohere) : C1-002, C5-002, SC2-006, SC5-005.
+- **Corpus (Sprint 4)** : C3-004 (le CCTP TCE ne remonte jamais sur les limites de prestations entre lots) ; 4 fichiers Bessières toujours sans L0.
+- **Harnais** : SC2-006 (timeout du banc, pas de l'EF) ; largeur des motifs de refus v3 à surveiller sur les prochaines campagnes (C7-004 notamment).
+- **Variance** : C4-004, C5-003, C8-003 (basculent d'un passage à l'autre du même code).
+
+#### Enseignements du Sprint 3
+
+1. **gpt-4.1-mini : verbosité → latence, sans gain réel.** Réponses 2 à 3 fois plus longues (570-1 750 tokens de sortie sur C3/C4) → p50 réel 6,0 s (+2,1 s), hors du budget accepté (+1 s max, décision d'Eric). Aucun des échecs de génération ciblés du réel n'est réglé (C1-002 : 14 vs 9 mois ; C2-001 : « réseaux » ; C5-002 : « variation des prix »). Sur synthétique : gagne SC5-007/008, mais SC3-006/007/010, SC8-003/006, SC2-006 restent inchangés et la fidélité synthétique baisse (0,628).
+2. **gemini-2.5-flash boucle sur un caractère quand la réflexion est coupée — fait établi.** Sans garde : 1/24 réponses réelles (C3-001, 197 160 espaces dans une cellule de tableau, 24 s) et 4/57 réponses synthétiques (100-195 k caractères, 24-26 s). Avec la règle de forme anti-espaces, la boucle se déplace sur les tirets de séparation (SC3-004, SC5-001 : 101 k « - », 6 400 tokens = plafond atteint). Avec la garde générique (> 200 répétitions d'un même caractère → flux coupé) : 2/62 boucles coupées à ~1,5 s, mais les réponses tronquées (« Voici… ») repassent alors en échec (SC3-002, SC6-005). Taux global ≈ 3-6 % des réponses sur extraits. `usage.output_tokens` est sous-compté sur ces cas (40 tokens comptés pour 197 k caractères produits).
+3. **La garde de répétition** (> 200 répétitions d'un même caractère → flux coupé, `metrics.counts.runaway`) limite la dégénérescence au lieu de la laisser courir jusqu'au plafond de tokens, sans pour autant rendre le modèle promouvable (réponse tronquée = échec).
+4. **Le juge de fidélité est déterministe à T=0 — fait établi.** Écart-type 0,000 sur 3 passages, sur tous les rapports testés : l'instabilité constatée au Sprint 2 (C5 0,75 → 0,25) venait de la variance des réponses d'une campagne à l'autre, pas du juge. Un seul passage suffit désormais ; `--chunks-only` exclut le mode intégral (C4) et les refus (n = 27-28 réel, 46-48 synthétique).
+5. **Nouvelles formulations de refus (C7).** gpt-4.1-mini et gemini-2.5-flash refusent avec des tournures absentes du motif v1 (« aucune mention explicite », « ne mentionne à aucun endroit », « ne contient aucun fichier », « n'existe pas de ») → motif de refus v2 (fenêtre 160 caractères) puis v3 ; `eval/rescore-refusals.ts` relit les C7 des rapports déjà produits avec le motif courant, sans réécrire les fichiers de rapport.
+6. **Le coût par requête est désormais mesuré.** La baseline v2.2.0 est antérieure au compteur de tokens (coût estimé a posteriori : ≈0,0015 $) ; la baseline v2.3.0 le mesure directement : 0,0021 $ (réel) / 0,0016 $ (synthétique) par requête, génération seule (condenser, embeddings, suggestions non comptés) → gemini-2.5-flash ≈ ×2-2,6, gpt-4.1-mini ≈ ×2-2,4.
+7. **`eval_overrides.llm_model` n'est accepté qu'en `service_role`** : toute autre origine (utilisateur, anonyme) voit la surcharge ignorée et journalisée plutôt que rejetée par une erreur — ARPET n'envoie jamais ce champ.
+
+#### Décisions
+
+1. **gpt-4o-mini reste le modèle de génération sur extraits** (migration `rag_librarian_llm_model`, `llm_model` désormais explicite en base). gpt-4.1-mini : hors budget de latence, aucun gain réel. gemini-2.5-flash : parité de critères (31/35 vs 30/35 réel ; 49/60 vs 50/60 synthétique), fidélité réel +0,08, dans le budget de latence (p50 +0,6 s), mais 3-6 % de réponses tronquées par boucle de répétition (défaut nouveau, visible) et coût ×3 (0,0043 $ vs ≈0,0015 $). gemini-2.5-flash reste « prêt » : la bascule est une ligne (`UPDATE config.agent_prompts SET parameters = jsonb_set(parameters,'{generation,llm_model}', to_jsonb('gemini-2.5-flash'::text), true) WHERE agent_type='librarian_v3' AND app_id='arpet' AND org_id IS NULL AND is_active`), à retester au Sprint 4 avec un budget de réflexion configurable (`generation.gemini_thinking_budget`, 128-512) — **hypothèse** : un budget de réflexion non nul pourrait supprimer les boucles observées.
+2. **Cohere reste dormant.** La gate est déclenchée (C1-002, C5-002, SC2-006, SC5-005 restent en échec avec gpt-4o-mini), mais aucun secret `COHERE_API_KEY` n'est posé sur le projet ; le code est prêt et testé (extraits ciblés préservés, gate agentique lue avant le rerank). Activation : (1) poser la clé — `npx supabase secrets set COHERE_API_KEY=… --project-ref odspcxgafcqxjzrarsqf` (valeur jamais dans le chat) ; (2) migration `jsonb_set(parameters,'{features}', COALESCE(parameters->'features','{}'::jsonb) || '{"enable_reranking": true, "cohere_top_n": 12, "cohere_candidates": 24}'::jsonb)` sur la ligne `librarian_v3` ; (3) campagne `s3-v2.3.0-cohere` (sans surcharge de modèle, le modèle retenu étant déjà en base) ; (4) décision sur C1-002/C5-002/SC2-006/SC5-005 + p50 (+150-300 ms attendus).
+3. **Harnais retenu pour la suite** : motif de refus v3, juge de fidélité à un seul passage (option `--passes` conservée pour un contrôle ponctuel), `eval_overrides` réservé au `service_role`.
+4. **Prochaine étape : Sprint 4** — corpus (L0 des 4 fichiers Bessières, ré-ingestion CCAG/NFP03-001, QQOQCCP → FTS, C3-004), re-mesure de gemini-2.5-flash avec budget de réflexion configurable, Cohere dès que la clé est posée. Prompt de liaison : `Frontend-Baikal/docs/superpowers/prompts/2026-09-23-sprint4-rag.md`.
+
 ---
 
 *Document généré à partir de l'audit du 2026-06-12 (lecture complète de `baikal-retrieval` v2.0.0, de `rag.match_documents_v14` en production, de la config live `config.agent_prompts` et des statistiques du corpus).*
