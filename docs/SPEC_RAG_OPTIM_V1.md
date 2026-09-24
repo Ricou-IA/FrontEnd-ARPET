@@ -221,9 +221,9 @@ Les questions des utilisateurs sont infinies, mais les **situations de retrieval
 |---|---|---|---|
 | 0 — Mesure | ✅ terminé 2026-09-13 | — | `Frontend-Baikal/eval/reports/baseline-v2.0.0.md` |
 | 1 — Retrieval | ✅ terminé 2026-09-15 (plan `Frontend-Baikal/docs/superpowers/plans/2026-09-13-sprint1-rag-retrieval.md`) | `v2.0.0` + synth | `Frontend-Baikal/eval/reports/baseline-v2.1.0.md` + `-synth.md` |
-| 2 — Multi-docs | ⏳ | | |
-| 3 — Génération + reranker | ⏳ | | |
-| 4 — Corpus | ⏳ | | |
+| 2 — Multi-docs | ✅ terminé 2026-09-21 (plan `Frontend-Baikal/docs/superpowers/plans/2026-09-19-sprint2-rag.md`) | `v2.1.0` + synth | `Frontend-Baikal/eval/reports/baseline-v2.2.0.md` + `-synth.md` |
+| 3 — Génération + reranker | ✅ terminé 2026-09-23 (plan `Frontend-Baikal/docs/superpowers/plans/2026-09-23-sprint3-rag.md`) | `v2.2.0` + synth | `Frontend-Baikal/eval/reports/baseline-v2.3.0.md` + `-synth.md` |
+| 4 — Corpus | ✅ terminé 2026-09-24 (plan `Frontend-Baikal/docs/superpowers/plans/2026-09-24-sprint4-rag.md`) | `v2.3.0` + synth | `Frontend-Baikal/eval/reports/baseline-v2.4.0.md` + `-synth.md` |
 
 
 ### 7.1 Baseline v2.0.0 (2026-09-13, 35 questions, golden set v1 intégralement validé)
@@ -551,6 +551,152 @@ Par classe (critères, rapport) :
 2. **Cohere reste dormant.** La gate est déclenchée (C1-002, C5-002, SC2-006, SC5-005 restent en échec avec gpt-4o-mini), mais aucun secret `COHERE_API_KEY` n'est posé sur le projet ; le code est prêt et testé (extraits ciblés préservés, gate agentique lue avant le rerank). Activation : (1) poser la clé — `npx supabase secrets set COHERE_API_KEY=… --project-ref odspcxgafcqxjzrarsqf` (valeur jamais dans le chat) ; (2) migration `jsonb_set(parameters,'{features}', COALESCE(parameters->'features','{}'::jsonb) || '{"enable_reranking": true, "cohere_top_n": 12, "cohere_candidates": 24}'::jsonb)` sur la ligne `librarian_v3` ; (3) campagne `s3-v2.3.0-cohere` (sans surcharge de modèle, le modèle retenu étant déjà en base) ; (4) décision sur C1-002/C5-002/SC2-006/SC5-005 + p50 (+150-300 ms attendus).
 3. **Harnais retenu pour la suite** : motif de refus v3, juge de fidélité à un seul passage (option `--passes` conservée pour un contrôle ponctuel), `eval_overrides` réservé au `service_role`.
 4. **Prochaine étape : Sprint 4** — corpus (L0 des 4 fichiers Bessières, ré-ingestion CCAG/NFP03-001, QQOQCCP → FTS, C3-004), re-mesure de gemini-2.5-flash avec budget de réflexion configurable, Cohere dès que la clé est posée. Prompt de liaison : `Frontend-Baikal/docs/superpowers/prompts/2026-09-23-sprint4-rag.md`.
+
+### 7.6 Sprint 4 — résultats (2026-09-24, code jusqu'au commit `1af234d` du repo Baikal, migrations `rag_fts_entites_qqoqccp`, `rag_archive_chunks_bessieres_sprint4` + rollback, `rag_archive_chunks_app_sprint4` + rollback, archivages/ré-archivages par fichier (CCAP, RICT/PGC/MT, PGC, AE, CCAG), `rag_rattache_sous_sections_v5`)
+
+Sprint 4 remet à niveau le corpus ARPET plutôt que le code : les 7 fichiers sans hiérarchie L0/L1 exploitable (5 documents du projet Bessières + CCAG et Norme NFP03-001 de la couche application) sont ré-ingérés en FLUX 3 v5.1.0, le `fts` de `rag.documents` est repondéré pour porter les entités QQOQCCP (normes, lots, localisations), gemini-2.5-flash est re-mesuré avec un budget de réflexion configurable, et Cohere reste en attente de sa clé. Plan exécuté : `Frontend-Baikal/docs/superpowers/plans/2026-09-24-sprint4-rag.md`. Rapports : `Frontend-Baikal/eval/reports/baseline-v2.4.0.md` et `baseline-v2.4.0-synth.md` (+ campagnes intermédiaires `s4-v2.3.0-fts*`, `s4-v2.3.0-corpus*`, `s4-v2.4.0-flash256-ech*`, gitignorées).
+
+Modules livrés (repo Baikal) : migration `rag_fts_entites_qqoqccp` (`rag.fts_entites_a/b`, `rag.update_fts` pondérée poids A/B/D, trigger élargi à `content, comment_normes, qui_lots, qqoqccp, metadata`, backfill de 3 700 lignes) ; ré-ingestion pilotée fichier par fichier via le webhook de production de FLUX 3 « copy 2 » (`SQQlO1oZYBt9EU0r`, MCP n8n invalidé pendant tout le sprint) ; `ingest-documents` v8.2.0 (upsert par lots de 100, correctif du `statement_timeout` 8 s) ; `baikal-retrieval` v2.4.0 (`gemini_thinking_budget` configurable, `eval_overrides` v2 : `llm_model`, `gemini_thinking_budget`, `enable_reranking`, service_role seulement) ; migration de données `rag_rattache_sous_sections_v5` (sous-sections de niveau 2/3 rattachées à leur L0). Tests : 158 EF (`deno test -A supabase/functions/baikal-retrieval/`, l'estimation « 160 » du plan était fausse), 11 banc, `deno check` 0 erreur.
+
+#### Corpus après Sprint 4
+
+| Couche | Chunks approuvés | dont L0 | Archivés (`rejected`) | Pipeline |
+|---|---|---|---|---|
+| app | 908 | 292 | 1 071 | FLUX 3 v5.1.0 (2 fichiers ré-ingérés) |
+| project | 2 608 | 665 | 536 | FLUX 3 v5.1.0 (5 fichiers ré-ingérés, dont les autres projets non touchés) |
+| **Total approuvé** | **3 516** | **957** | **1 607** | |
+
+Les 7 fichiers, avant (pipeline janvier 2026 / 3.2.0, sans L0 exploitable) → après (FLUX 3 v5.1.0) :
+
+| Fichier | Avant (chunks) | Après (L0 + L1, total) |
+|---|---|---|
+| Acte d'Engagement | 42 (aucun L0) | 18 + 23 = 41 |
+| CCAP (Bessières) | 107 (aucun L0) | 64 + 72 = 136 |
+| Mémoire Technique | 171 (aucun L0) | 53 + 94 = 147 |
+| PGC | 175 (aucun L0) | 41 + 66 = 107 |
+| RICT | 41 (aucun L0) | 25 + 49 (+10 ex-niveau 2, rattachés) = 84 |
+| CCAG (app) | 527 (129 L0 + 374 L1 + 24 niveaux 2/3) | 105 + 323 (+9 ex-niveaux 2/3, rattachés) = 437 |
+| Norme NFP03-001 (app) | 544 (98 L0 + 446 L1) | 187 + 284 = 471 |
+
+Après la migration de rattachement, 0 chunk approuvé de niveau ≥ 2 subsiste dans tout le corpus.
+
+#### Ré-ingestion : ce qui s'est passé
+
+Le pipeline FLUX 3 v5.1.0 a été déclenché 10 fois pour ré-ingérer les 7 fichiers (3 d'entre eux — Acte d'Engagement, PGC, CCAG — ont nécessité un second essai) : CCAP, RICT et Mémoire Technique réussis du premier coup ; Acte d'Engagement et PGC échoués à l'essai 1 (HTTP 200 corps vide, 0 chunk inséré, sans message d'erreur exploitable — arrêt après la phase Gemini pour l'Acte d'Engagement, avant même LlamaParse pour le PGC), réussis à l'essai 2 sans changement de payload ; CCAG échoué à l'essai 1 pour une cause identifiée précisément — `ingest-documents` recevait bien les 496 chunks (« Reçu 496 document(s) ») mais l'upsert Postgres d'un seul bloc dépassait le `statement_timeout` de 8 s du rôle `authenticated` — corrigé par `ingest-documents` v8.2.0 (upsert par lots de 100), déployé en cours de sprint avant même le verdict de revue pour ne pas bloquer l'ingestion de Norme NFP03-001 (471 chunks) qui suivait ; CCAG a ensuite réussi au second essai avec le correctif. Le connecteur MCP n8n étant invalidé dès le début de la tâche, les 10 exécutions ont été déclenchées par appel HTTP direct du webhook de production de FLUX 3 (`/webhook/process-document`), exactement l'appel que fait le nœud 1.4 de FLUX 1 en production — sans changement de comportement observé par rapport au MCP.
+
+FLUX 3 v5.1.0 a par ailleurs produit, sur 6 des 7 fichiers, des sous-sections de niveau 2/3 dont le parent déclaré est un chunk L1 et non un L0 (24 chunks au total : 5 en niveau 1 mal étiqueté, 16 en niveau 2, 3 en niveau 3, répartis sur RICT, PGC et CCAG). `rag.resolve_chunk_hierarchy` ne rattachant que L1→L0, ces chunks restaient invisibles à `match_documents_v15` (comme les 24 anciens du CCAG avant ré-ingestion). La migration `rag_rattache_sous_sections_v5` (deux passes) les a rattachés au L0 grand-parent et ramenés en niveau 1, niveau d'origine conservé dans `metadata` pour un rollback ; 2 chunks sans `parent_local_id` sont laissés tels quels.
+
+#### Campagnes
+
+| Rapport | Set | Critères | Recall | Tous docs (C3) | MRR | p50 | p95 | Coût/req | Tokens in/out | Agentique | Fidélité (juge, extraits) | Citations |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| baseline-v2.3.0 | réel 35 | 80 % (28) | 93 % | 75 % | 0,805 | 4,24 s | 12,6 s | 0,00207 $ | 10 331 / 341 | 29 % | 0,632 (n=23) | 0,884 |
+| s4-v2.3.0-fts | réel | 83 % (29) | 100 % | 75 % | 0,855 | 4,70 s | 22,2 s | 0,00207 $ | 10 885 / 375 | 26 % | 0,542 (n=24) | 0,653 |
+| s4-v2.3.0-corpus | réel | 83 % (29) | 100 % | 75 % | 0,847 | 4,87 s | 11,5 s | 0,00215 $ | 11 507 / 364 | 26 % | 0,685 (n=23) | 0,732 |
+| baseline-v2.4.0 | réel | 83 % (29) | 100 % | 75 % | 0,825 | 4,37 s | 11,0 s | 0,00204 $ | 11 251 / 349 | 26 % | 0,676 (n=21) | 0,757 |
+| baseline-v2.3.0-synth | synth 60 | 83 % (50) | 96 % | 100 % | 0,901 | 2,93 s | 12,8 s | 0,00163 $ | 9 905 / 279 | 5 % | 0,673 (n=44) | 0,750 |
+| s4-v2.3.0-fts-synth | synth | 82 % (49) | 94 % | 100 % | 0,904 | 2,97 s | 7,65 s | 0,00162 $ | 9 971 / 228 | 7 % | 0,709 (n=44) | 0,731 |
+| s4-v2.3.0-corpus-synth | synth | 85 % (51) | 98 % | 100 % | 0,932 | 3,21 s | 10,7 s | 0,00169 $ | 10 071 / 282 | 7 % | 0,680 (n=45) | 0,701 |
+| baseline-v2.4.0-synth | synth | 83 % (50) | 98 % | 100 % | 0,932 | 3,04 s | 7,96 s | 0,00158 $ | 10 128 / 208 | 3 % | 0,670 (n=45) | 0,744 |
+
+Échantillon gemini-2.5-flash + budget de réflexion 256 (`s4-v2.4.0-flash256-ech{,-synth}`, sous-ensemble de classes seulement, non comparable aux lignes globales ci-dessus) : réel C3/C5/C6 (11 questions) 10/11 → 8/11 critères, p50 5,33 s → 4,91 s, coût 0,00215 $ → 0,00466 $ ; synthétique C3/C5 (18 questions) 12/18 → 14/18, p50 3,92 s → 4,27 s, même coût ×2,7. Les campagnes `fts`, `corpus` et l'échantillon `flash256` sont gitignorées (`eval/reports/`) ; seule `baseline-v2.4.0{,-synth}.*` est commitée.
+
+#### Baseline v2.4.0 vs v2.3.0 — réel (35 questions)
+
+| Métrique | v2.3.0 | v2.4.0 |
+|---|---|---|
+| Critères | 80 % (28/35) | 83 % (29/35) |
+| Recall documentaire | 93 % | 100 % |
+| Les deux documents cités (C3) | 75 % (3/4) | 75 % (3/4) |
+| MRR | 0,805 | 0,825 |
+| p50 | 4,24 s | 4,37 s |
+| p95 | 12,6 s | 11,0 s |
+| Coût moyen par requête | 0,00207 $ | 0,00204 $ |
+| Tokens in/out | 10 331 / 341 | 11 251 / 349 |
+| Agentique | 29 % | 26 % |
+| Fidélité (juge, extraits) | 0,632 (n=23, x3 passages) | 0,676 (n=21, 1 passage) |
+| Citations | 0,884 | 0,757 |
+| Erreurs banc | 0 | 0 |
+
+Par classe (critères, v2.3.0 → v2.4.0) :
+
+| Classe | v2.3.0 | v2.4.0 |
+|---|---|---|
+| C1 | 7/8 | 7/8 |
+| C2 | 4/5 | 5/5 |
+| C3 | 4/4 | 4/4 |
+| C4 | 3/4 | 3/4 |
+| C5 | 2/4 | 2/4 |
+| C6 | 3/3 | 3/3 |
+| C7 | 4/4 | 4/4 |
+| C8 | 1/3 | 1/3 |
+
+Gains nominatifs (échec v2.3.0 → réussite v2.4.0) : C1-002 (effet corpus, re-segmentation du Mémoire Technique), C2-001 (variance de génération), C4-004 (variance connue, resynthèse Gemini sur fichier entier). Pertes nominatives (réussite v2.3.0 → échec v2.4.0) : C1-005 (artefact de score du `ts_rank` pondéré, effet FTS), C4-001 (variance de génération sur lecture intégrale). Stables en échec : C5-002, C5-003, C8-002, C8-003. Hors bascule de critère : C3-004 gagne son recall documentaire (75 % → 100 % sur C3, CCTP TCE désormais cité au rang 1) sans changer de critère (déjà validé).
+
+#### Baseline v2.4.0 vs v2.3.0 — synthétique (60 questions)
+
+| Métrique | v2.3.0 | v2.4.0 |
+|---|---|---|
+| Critères | 83 % (50/60) | 83 % (50/60) — mêmes 10 échecs |
+| Recall documentaire | 96 % | 98 % |
+| Les deux documents cités (C3) | 100 % (10/10) | 100 % (10/10) |
+| MRR | 0,901 | 0,932 |
+| p50 | 2,93 s | 3,04 s |
+| p95 | 12,8 s | 7,96 s |
+| Coût moyen par requête | 0,00163 $ | 0,00158 $ |
+| Tokens in/out | 9 905 / 279 | 10 128 / 208 |
+| Agentique | 5 % | 3 % |
+| Fidélité (juge, extraits) | 0,673 (n=44) | 0,670 (n=45) |
+| Citations | 0,750 | 0,744 |
+| Erreurs banc | 1 (SC2-006, timeout du banc) | 0 |
+
+Par classe : identique entre v2.3.0 et v2.4.0 (C1 8/8, C2 5/6, C3 7/10, C4 5/6, C5 5/8, C6 10/10, C7 6/6, C8 4/6) — aucun gain ni perte nominatif sur le trajet complet du sprint, malgré des bascules intermédiaires (SC5-001, SC4-006) qui se compensent exactement et portent toutes deux sur des projets (`cmp`, `ehpad`) non touchés par la ré-ingestion.
+
+#### Classement des échecs restants
+
+Réel (6 échecs, 29/35) :
+- **C1-005** (C1) — « Dunant » manquant, artefact de score du FTS pondéré.
+- **C4-001** (C4) — « réhabilitation énergétique » manquant, resynthèse Gemini sur lecture intégrale (variance).
+- **C5-002** (C5) — « variation des prix » manquant, choix d'extrait dans le CCAP (stable depuis le Sprint 2).
+- **C5-003** (C5) — « 11.2 » manquant, question documentée comme instable d'une campagne à l'autre.
+- **C8-002** (C8) — « acheteur » manquant, le CCAG (couche app) n'est jamais cité malgré la ré-ingestion.
+- **C8-003** (C8) — « Communication Parties Prenantes » manquant, échec stable depuis le Sprint 1.
+
+Synthétique (10 échecs, 50/60) :
+- **SC2-006** (C2) — « auto-lissant » manquant.
+- **SC3-006** (C3) — « polystyr » manquant (CR 41, lot rangement/polystyrène).
+- **SC3-007** (C3) — « mois » manquant (délai de levée des réserves).
+- **SC3-010** (C3) — « 25.41 » manquant (DTU du lot 07 lu dans le lot 08).
+- **SC4-006** (C4) — « dalles sur plots » manquant, resynthèse Gemini sur lecture intégrale.
+- **SC5-005** (C5) — « 5 jours » manquant, boucle agentique sans source.
+- **SC5-007** (C5) — « SEFAL », « audit » manquants.
+- **SC5-008** (C5) — « 100 » manquant (pénalité CCAP, échec stable sur le projet Bessières ré-ingéré).
+- **SC8-003** (C8) — « volets roulants », « SOMFY » manquants (numéro de point non exploité).
+- **SC8-006** (C8) — « 50 % », « valoris » manquants (point 5.4 de la charte).
+
+#### Enseignements du Sprint 4
+
+1. **Le FTS pondéré (S4.3) fait remonter le CCTP TCE au rang 1 sur C3-004** (recall documentaire de la classe C3 : 75 % → 100 %), sans faire basculer son critère (déjà validé avant la migration) ; le gain global de critères réel (+1, 28 → 29/35) est confirmé mais deux questions basculent en sens inverse (C1-005, artefact de score du nouveau `ts_rank` pondéré ; C5-003, variance déjà documentée) — la règle de rollback du plan (une classe perdant plus d'une question hors variance connue) n'a été déclenchée à aucune étape du sprint.
+2. **L'effet de la ré-ingestion du corpus est réel mais dominé par le bruit de génération.** Sur les 15 questions réelles qui lisent effectivement les 7 fichiers ré-ingérés, une seule bascule franchement (C1-002, la re-segmentation du Mémoire Technique fait remonter un chunk contenant la bonne durée contractuelle) ; les deux bascules synthétiques nettes observées en cours de sprint (SC5-001, SC4-006) portent sur des projets (`cmp`, `ehpad`) non touchés par la ré-ingestion et se compensent exactement dans la baseline finale.
+3. **Le budget de réflexion Gemini (256) ne supprime pas les boucles de répétition** (hypothèse formulée au Sprint 3, infirmée) : 4 réponses sur 37 coupées par la garde sur l'échantillon (≈ 11 %, contre 3-6 % mesurés au Sprint 3 sans réflexion), coût multiplié par 2,2-2,8, sans gain net de critères (réel 10/11 → 8/11 sur C3/C5/C6). gpt-4o-mini reste le modèle de génération sur extraits, aucune migration (G3).
+4. **Un upsert `rag.documents` en un seul lot dépasse le `statement_timeout` (8 s, rôle `authenticated`) à partir de ~500 lignes** (CCAG, 496 chunks avec embeddings 1536d, index HNSW et trigger FTS) — `ingest-documents` v8.2.0 upserte désormais par lots de 100 ; le correctif a été nécessaire pour faire passer le CCAG (437 chunks) comme la Norme NFP03-001 (471 chunks).
+5. **FLUX 3 v5.1.0 produit parfois des sous-sections de niveau 2/3 dont le parent déclaré est un chunk L1**, invisibles à `match_documents_v15` car `rag.resolve_chunk_hierarchy` ne rattache que L1→L0 : 24 chunks sur 6 des 7 fichiers, rattachés au L0 grand-parent par la migration `rag_rattache_sous_sections_v5` — à rejouer après toute nouvelle ingestion tant que FLUX 3 n'est pas corrigé en amont.
+6. **La passe 2 QQOQCCP de FLUX 3 reste partielle et instable** : 0 à 17 % des chunks enrichis selon le fichier au Sprint 4 (CCAP 16/136, RICT/PGC/Mémoire Technique/CCAG/NFP03-001 à 0 ou quasi 0), contre 12-60 % observés en mars — comportement connu de la passe 2, pas une régression du jour, mais aucun des 7 fichiers ré-ingérés n'atteint le niveau de densité normes/lots du CCTP TCE (86/50).
+7. **Le webhook FLUX 3 répond HTTP 200 corps vide même à l'échec total** (0 chunk inséré), sur des points d'arrêt différents selon l'exécution (LlamaParse pour l'essai 1 du PGC, phase Gemini pour l'essai 1 de l'Acte d'Engagement) — sans journaux du conteneur n8n consultables (connecteur MCP invalidé pendant le sprint), le seul diagnostic possible a été la vérification SQL après coup.
+8. **La pondération de couche (S4.4, en place depuis le Sprint 1) ne montre pas d'effet de sur-représentation** de la couche app après ré-ingestion du CCAG/NFP03-001 dans les questions projet non normatives : part des sources app 11,9 % → 7,5 % (en baisse), signal en dessous du bruit de l'échantillon (18 questions) — `search.app_layer_weight` reste inchangée.
+9. **Le juge de fidélité, mesuré ici en un seul passage** (contre trois pour la référence v2.3.0), donne un signal encourageant côté réel (groundedness 0,632 → 0,676) malgré un creux transitoire à 0,542 après le seul FTS avant ré-ingestion, et une baisse des citations (0,884 → 0,757) à surveiller ; côté synthétique, fidélité et citations restent stables (0,673 → 0,670 ; 0,750 → 0,744). Lecture prudente : la comparaison x1 passage vs x3 passages n'est pas strictement homogène.
+
+#### Décisions
+
+1. **gemini-2.5-flash + budget de réflexion 256 : non promu (G3, aucune migration).** Le budget ne supprime pas les boucles de répétition (enseignement 3) ; gpt-4o-mini reste le modèle de génération sur extraits.
+2. **Cohere reste dormant (G4).** `COHERE_API_KEY` toujours absente à la clôture du sprint (vérifiée le 2026-09-24 à 14:44 locale) ; code et surcharge `--enable-reranking` prêts — campagne `s4-v2.4.0-cohere` vs `baseline-v2.4.0` à lancer par Eric dès la clé posée.
+3. **S4.4 (pondération de couche) : aucun changement.** Déjà en place depuis le Sprint 1, aucun effet mesurable après la ré-ingestion (enseignement 8) ; `search.app_layer_weight` reste NULL en base (repli code 0,5).
+4. **FTS pondéré (S4.3) : conservé, rollback non nécessaire.** Aucune classe n'a perdu plus d'une question hors variance connue sur les deux campagnes (fts, corpus).
+5. `baikal-retrieval` v2.4.0 (commit `1af234d` du repo Baikal) et `ingest-documents` v8.2.0 (commit `b6d41b8`) en production depuis le 2026-09-24 ; migrations listées en tête de section appliquées ; baselines figées `eval/reports/baseline-v2.4.0.*` et `baseline-v2.4.0-synth.*`.
+
+#### Reports Sprint 5
+
+Fiabiliser la passe 2 QQOQCCP de FLUX 3 (enrichissement 0-17 % au Sprint 4) ; rendre FLUX 3 observable (réponse d'erreur explicite au lieu du 200 vide, ou file d'ingestion pgmq) ; normalisation des normes côté FTS (« NF P03-001 » vs « NF P 03-001 », tokenisation divergente entre requête et entité) ; flash — SC5-005/SC5-007/SC5-008 gagnées par gemini-2.5-flash là où gpt-4o-mini échoue : piste par intention (C5 « procédure » seulement) ou correction de la boucle en amont (règle de forme plus stricte, `stopSequences`) ; Cohere dès que la clé est posée (campagne `s4-v2.4.0-cohere` vs `baseline-v2.4.0`) ; mineurs R-S3c non traités (motif `usageMetadata` dupliqué, `candidateCount` cross-ref/targeted, enfants ciblés orphelins après rerank, buffer SSE final, usage avant throw dans `gemini-agent`, boucle à cheval sur deux morceaux, `logQuery` Phase B, payload `agentic` du repli sans `steps`) ; mineurs des revues du sprint (`fts_entites_a` renvoie `' '` au lieu de `NULL` quand normes et lots sont vides, sans effet sur le tsvector ; le commentaire de rollback FTS ne mentionne pas `DROP FUNCTION` ; `insertedDocs` réinitialisé deux fois dans `ingest-documents`) ; clé LlamaParse en clair dans la définition du workflow FLUX 3 (nœud 3.5a, header Authorization) ; `rag.resolve_chunk_hierarchy` ne lie que L1→L0 (les sous-sections v5.1.0 rattachées à un L1 restent orphelines sans rejouer `rag_rattache_sous_sections_v5` après toute nouvelle ingestion) ; C8-002, C5-002, C8-003 non réglés.
 
 ---
 

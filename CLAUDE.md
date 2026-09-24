@@ -215,14 +215,29 @@ git push origin master    # Auto-deploy Vercel
 
 ## 📌 État Courant
 
-**Date** : 2026-09-23
-**Branche** : `main` (`master` poussé le 2026-09-21 pour le chat Sprint 2 ; `main` est maintenant en avance sur `origin/master` des docs de Sprint 3 et du commit `53be574` (`AgenticSummary.error?`) — pousser `master` reste la décision d'Eric)
-**RAG prod** : `baikal-retrieval` **v2.3.0** — Sprint 3 clos ; code jusqu'au commit `aabc304` du repo Baikal, déployé le 2026-09-23, migration `rag_librarian_llm_model` appliquée (`llm_model = gpt-4o-mini` explicite en base)
+**Date** : 2026-09-24
+**Branche** : `main` (`master` poussé le 2026-09-21 pour le chat Sprint 2 ; `main` est maintenant en avance sur `origin/master` des docs de Sprint 3 et Sprint 4 et du commit `53be574` (`AgenticSummary.error?`) — pousser `master` reste la décision d'Eric)
+**RAG prod** : `baikal-retrieval` **v2.4.0** — Sprint 4 clos ; code jusqu'au commit `1af234d` du repo Baikal, déployé le 2026-09-24 ; `ingest-documents` **v8.2.0** (upsert par lots de 100, commit `b6d41b8`) ; migrations appliquées : `rag_fts_entites_qqoqccp`, `rag_archive_chunks_bessieres_sprint4` + rollback, `rag_archive_chunks_app_sprint4` + rollback, archivages/ré-archivages par fichier (CCAP, RICT/PGC/MT, PGC, AE, CCAG), `rag_rattache_sous_sections_v5`
+**Sprint 4** : ✅ terminé — les 7 fichiers sans L0 exploitable (5 Bessières + CCAG + Norme NFP03-001) sont ré-ingérés en FLUX 3 v5.1.0, le `fts` porte désormais les entités QQOQCCP pondérées, gemini-2.5-flash + budget de réflexion 256 ne supprime pas ses boucles de répétition (non promu), Cohere reste dormant faute de clé. Baseline v2.4.0 (§7.6) : réel 83 % (29/35), recall 100 %, p50 4,37 s, coût 0,00204 $/requête — synthétique 83 % (50/60), recall 98 %, p50 3,04 s, coût 0,00158 $/requête
 **Sprint 3** : ✅ terminé — deux candidats mesurés (gpt-4.1-mini, gemini-2.5-flash) contre gpt-4o-mini sur les deux golden sets (critères, fidélité, latence, coût). gpt-4o-mini reste retenu (gemini-2.5-flash à parité de critères mais boucle sur un caractère dans 3-6 % des réponses sans réflexion, coût ×3) ; Cohere prêt mais dormant faute de `COHERE_API_KEY`. Baseline v2.3.0 (§7.5) : réel 80 % (28/35), recall 93 %, p50 4,24 s, coût 0,0021 $/requête — synthétique 83 % (50/60), recall 96 %, p50 2,93 s, coût 0,0016 $/requête
 **Sprint 2** : ✅ terminé — baseline v2.2.0 figée (§7.4). Réel (35 q.) : recall doc 93 % (97 % au rejeu), critères 83 % (29/35, dont 4 par critères révisés), C3 4/4, MRR 0,805, p50 3,9 s, agentique 29 % — synthétique (60 q.) : recall 98 %, critères 83 % (50/60, inchangé), les deux documents cités 100 %, p50 2,4 s, agentique 5 %
 **Sprint 1** : FTS OR-isé (`match_documents_v15`), pondération couche application, condensation des suivis (condenser), gate agentique lisible, page (`page_start`, P11) corrigée, documents nommés (résolution scalable)
 **Résultats** : réel (35 q.) recall doc 97 %, critères 69 % (24/35), MRR 0,79, Page OK 71 %, p50 4,3 s, agentique 26 % — synthétique (60 q.) recall doc 98 %, critères 83 % (50/60), MRR 0,93, p50 2,9 s, agentique 8 %
-**Prochaine étape** : Sprint 4 — corpus (L0 des 4 fichiers Bessières, ré-ingestion CCAG/NFP03-001, QQOQCCP → FTS) ; re-mesurer gemini-2.5-flash avec un budget de réflexion configurable ; activer Cohere dès que `COHERE_API_KEY` est posée
+**Prochaine étape** : Sprint 5 — fiabiliser la passe 2 QQOQCCP de FLUX 3, rendre FLUX 3 observable (erreur explicite au lieu du 200 vide), normalisation des normes côté FTS, piste flash par intention (C5) ou correction de la boucle, Cohere dès que `COHERE_API_KEY` est posée, mineurs R-S3c et des revues du Sprint 4
+
+### Sprint 4 RAG — ✅ TERMINÉ (2026-09-24)
+
+> Résultats détaillés : `docs/SPEC_RAG_OPTIM_V1.md` §7.6
+
+> Plan (repo Baikal) : `docs/superpowers/plans/2026-09-24-sprint4-rag.md` — décisions d'Eric : **5 fichiers Bessières** ré-ingérés (le CCAP inclus, objet storage recopié depuis le projet « Test ») ; **ordre FTS → corpus → flash → Cohere**, une cause par campagne ; **flash : un seul budget (256) mesuré sur échantillon** avant toute campagne complète ; **Cohere : Eric pose `COHERE_API_KEY` pendant le sprint** (non fait, reporté) ; **go de bout en bout** (migrations, déploiement et push sans re-validation), G3 (promotion flash) et G4 (activation Cohere) réservés à une décision d'Eric sur chiffres.
+
+Backend (repo Baikal, `baikal-retrieval` v2.4.0) : `fts` de `rag.documents` repondéré (normes/lots en poids A, localisations/titre de section en B, contenu en D, backfill 3 700 lignes) ; les 7 fichiers sans hiérarchie L0/L1 exploitable (Acte d'Engagement, CCAP, Mémoire Technique, PGC, RICT du projet Bessières ; CCAG et Norme NFP03-001 de la couche application) ré-ingérés en FLUX 3 v5.1.0 via le webhook de production (connecteur MCP n8n invalidé pendant tout le sprint) ; `ingest-documents` v8.2.0 (upsert par lots de 100, correctif du `statement_timeout` 8 s qui bloquait le CCAG à 496 chunks) ; sous-sections de niveau 2/3 produites par FLUX 3 v5.1.0 rattachées à leur L0 (migration `rag_rattache_sous_sections_v5`) ; budget de réflexion Gemini configurable (`generation.gemini_thinking_budget`) et surcharges d'éval v2 (`eval_overrides` : `llm_model`, `gemini_thinking_budget`, `enable_reranking`, service_role seulement).
+
+Décisions : **G3 — gemini-2.5-flash + réflexion 256 non promu** (4 boucles de répétition sur 37 réponses sur extraits, coût ×2,2-2,8, aucun gain net de critères) ; **G4 — Cohere non mesuré**, `COHERE_API_KEY` toujours absente à la clôture ; **S4.4 (pondération de couche) inchangée**, déjà en place depuis le Sprint 1, aucun effet mesurable après ré-ingestion ; **FTS pondéré conservé**, rollback non nécessaire (aucune classe en baisse de plus d'une question hors variance connue).
+
+Frontend (ce repo) : aucun changement de code — seuls les documents de fin de sprint (`SPEC_RAG_OPTIM_V1.md` §7.6, `CLAUDE.md`).
+
+Enseignement de méthode : la ré-ingestion du corpus a un effet réel mais dominé par le bruit de génération (une seule bascule franche sur les 15 questions réelles qui lisent les fichiers ré-ingérés) ; FLUX 3 répond HTTP 200 corps vide même à l'échec total, rendant le diagnostic dépendant de la vérification SQL après coup plutôt que des journaux du pipeline.
 
 ### Sprint 3 RAG — ✅ TERMINÉ (2026-09-22 → 23)
 
