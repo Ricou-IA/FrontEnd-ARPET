@@ -690,14 +690,51 @@ Synthétique (10 échecs, 50/60) :
 #### Décisions
 
 1. **gemini-2.5-flash + budget de réflexion 256 : non promu (G3, aucune migration).** Le budget ne supprime pas les boucles de répétition (enseignement 3) ; gpt-4o-mini reste le modèle de génération sur extraits.
-2. **Cohere reste dormant (G4).** `COHERE_API_KEY` toujours absente à la clôture du sprint (vérifiée le 2026-09-24 à 14:44 locale) ; code et surcharge `--enable-reranking` prêts — campagne `s4-v2.4.0-cohere` vs `baseline-v2.4.0` à lancer par Eric dès la clé posée.
+2. **Cohere reste dormant (G4).** `COHERE_API_KEY` toujours absente à la clôture du sprint (vérifiée le 2026-09-24 à 14:44 locale) ; code et surcharge `--enable-reranking` prêts — campagne à lancer contre `baseline-v2.4.0-flux3` (nouvelle référence depuis la ré-ingestion du 26/09) par Eric dès la clé posée.
 3. **S4.4 (pondération de couche) : aucun changement.** Déjà en place depuis le Sprint 1, aucun effet mesurable après la ré-ingestion (enseignement 8) ; `search.app_layer_weight` reste NULL en base (repli code 0,5).
 4. **FTS pondéré (S4.3) : conservé, rollback non nécessaire.** Aucune classe n'a perdu plus d'une question hors variance connue sur les deux campagnes (fts, corpus).
 5. `baikal-retrieval` v2.4.0 (commit `1af234d` du repo Baikal) et `ingest-documents` v8.2.0 (commit `b6d41b8`) en production depuis le 2026-09-24 ; migrations listées en tête de section appliquées ; baselines figées `eval/reports/baseline-v2.4.0.*` et `baseline-v2.4.0-synth.*`.
 
+#### FLUX 3 réparé et ré-ingestion des 7 fichiers (2026-09-25 → 27)
+
+Suite directe des enseignements 6, 7 et 10 : FLUX 3 « copy 2 » (`SQQlO1oZYBt9EU0r`) est réparé et publié par Eric (version active `646c84e4`), validé sur le RICT (4 essais, migrations `20260925220000` → `225000`), puis les 6 autres fichiers sont ré-ingérés un par un (migrations `20260926090000` → `095000`, raison d'archivage `reingestion-flux3-repare`, rollback en tête de chaque fichier).
+
+Correctifs publiés dans FLUX 3 : chunking v5.1.0 (3.6c) ; QQOQCCP v1.1.0 (3.6h, fin de la troncature à 8 192 tokens) ; 3.8b lit `inserted.rag_documents` (fin de `complete_ingestion_job(…, undefined)` : `processing_status`, `chunk_count` et `processed_at` sont de nouveau renseignés, le nœud 3.9 Respond est atteint) ; retry 3 × 5 s sur les appels Gemini 3.6d et 3.6i ; 3.6f tout-ou-rien (un lot en échec fait échouer l'exécution au lieu d'une ingestion partielle marquée terminée) ; réparation du JSON Gemini invalide dans 3.6e et 3.6j (v3 : caractères de contrôle, échappements invalides, chaînes orphelines, par tokenisation).
+
+| Fichier | v5.0.0 (Sprint 4) : chunks · enrichis | FLUX 3 réparé : L0 + L1 = total · enrichis | Normes / lots (après) | Texte L1 |
+|---|---|---|---|---|
+| Acte d'Engagement | 41 · 1 | 9 + 22 = 31 · 31 | 3 / 0 | — |
+| CCAP (Bessières) | 136 · 16 | 20 + 49 = 69 · 69 | 28 / 3 | — |
+| Mémoire Technique | 147 · 0 | 21 + 56 = 77 · 77 | 5 / 12 | +30 % (page 3 = sommaire, non reprise) |
+| PGC | 107 · 0 | 23 + 54 = 77 · 77 | 5 / 32 | — |
+| RICT | 84 · 14 | 13 + 31 = 44 · 44 | 11 / 12 | — |
+| CCAG (app) | 437 · 10 | 69 + 187 = 256 · 256 | 40 / 4 | +32 %, pages 1-52 identiques |
+| Norme NFP03-001 (app) | 471 · 41 | 56 + 144 = 200 · 200 | 31 / 11 | +36 %, pages 1-72 identiques |
+| **Total** | **1 423 · 82 (5,8 %)** | **754 · 754 (100 %)** | **123 / 74** (avant : 6 / 2) | |
+
+Les chunks sont deux fois moins nombreux mais plus longs (le texte L1 augmente d'un tiers là où il a été mesuré) : v5.1.0 regroupe davantage. Aucun chunk de niveau ≥ 2, aucune sous-section rattachée à un L1, aucun chunk sans embedding : `rag_rattache_sous_sections_v5` n'a pas eu à être rejouée. Corpus approuvé après ré-ingestion : app 456 (125 L0), projet 2 391 (550 L0).
+
+Campagnes (`baseline-v2.4.0-flux3{,-synth}.*`, même code v2.4.0, seul le corpus change ; juge en 1 passage, fidélité sur les réponses fondées sur extraits) :
+
+| Métrique | Réel v2.4.0 → flux3 | Synthétique v2.4.0 → flux3 |
+|---|---|---|
+| Critères | 83 % (29) → **89 % (31)** | 83 % (50) → 80 % (48) |
+| Recall documentaire | 100 % → 97 % | 98 % → 96 % |
+| Les deux documents cités (C3) | 75 % → **100 %** | 100 % → 100 % |
+| MRR | 0,825 → 0,805 | 0,932 → 0,910 |
+| p50 / p95 | 4,37 s / 11,0 s → 4,11 s / 21,8 s | 3,04 s / 7,96 s → 2,79 s / 8,46 s |
+| Coût / req | 0,00204 $ → 0,00203 $ | 0,00158 $ → 0,00165 $ |
+| Agentique | 26 % → 23 % | 3 % → 5 % |
+| Fidélité (juge) | 0,676 (n=21) → 0,636 (n=23) | 0,670 (n=45) → 0,644 (n=44) |
+| Citations | 0,757 → 0,812 | 0,744 → 0,674 |
+
+Bascules nominatives — réel : gains C5-002 (« variation des prix » dans le CCAP, échec stable depuis le Sprint 2 — effet corpus), C1-005, C4-001, et C3-004 cite enfin ses deux documents ; perte C4-004 (« Résume le CCAG », lecture intégrale flash-lite, variance connue). Synthétique : gains SC5-008 (pénalité 100 €/150 € du CCAP, échec stable du projet Bessières — effet corpus) et SC5-007 ; pertes SC3-004 (cmp) et SC4-001 (golfpark), sources identiques et aucun document ré-ingéré en jeu (variance de génération), SC3-009 (CCAP p19 bien fourni, gpt-4o-mini répond « pas trouvé » — l'information exacte gagnée en SC5-008), SC3-005 (citroen, le CCAG app remonte p30 au lieu de p35 et NFP03-001 sort : seule perte attribuable au corpus, « PPSPS » manquant). Le p95 réel est tiré par les trois lectures intégrales Gemini de C4 (43 s, 22 s, 15 s), chemin qui ne lit pas les chunks.
+
+Lecture : FLUX 3 réparé rend l'enrichissement QQOQCCP complet et fiable (5,8 % → 100 %), fait gagner les deux échecs stables du CCAP Bessières (C5-002, SC5-008) et le C3 réel ; l'effet global de critères reste de l'ordre du bruit de génération (réel +2, synthétique -2 dont une seule perte liée au corpus). Les nouvelles références sont `baseline-v2.4.0-flux3{,-synth}` : toute campagne suivante (Cohere compris) se compare à elles, plus à `baseline-v2.4.0`.
+
 #### Reports Sprint 5
 
-Publier le brouillon FLUX 3 (v5.1.0 + QQOQCCP v1.1.0 + retouches 3.8b/retry/garde 3.6f, décision du 25/09), mesurer le taux QQOQCCP sur un fichier test, puis décider de ré-ingérer les 7 fichiers ; fiabiliser la passe 2 QQOQCCP de FLUX 3 (enrichissement 0-17 % au Sprint 4) ; rendre FLUX 3 observable (réponse d'erreur explicite au lieu du 200 vide, ou file d'ingestion pgmq) ; normalisation des normes côté FTS (« NF P03-001 » vs « NF P 03-001 », tokenisation divergente entre requête et entité) ; flash — SC5-005/SC5-007/SC5-008 gagnées par gemini-2.5-flash là où gpt-4o-mini échoue : piste par intention (C5 « procédure » seulement) ou correction de la boucle en amont (règle de forme plus stricte, `stopSequences`) ; Cohere dès que la clé est posée (campagne `s4-v2.4.0-cohere` vs `baseline-v2.4.0`) ; mineurs R-S3c non traités (motif `usageMetadata` dupliqué, `candidateCount` cross-ref/targeted, enfants ciblés orphelins après rerank, buffer SSE final, usage avant throw dans `gemini-agent`, boucle à cheval sur deux morceaux, `logQuery` Phase B, payload `agentic` du repli sans `steps`) ; mineurs des revues du sprint (`fts_entites_a` renvoie `' '` au lieu de `NULL` quand normes et lots sont vides, sans effet sur le tsvector ; le commentaire de rollback FTS ne mentionne pas `DROP FUNCTION` ; `insertedDocs` réinitialisé deux fois dans `ingest-documents`) ; clé LlamaParse en clair dans la définition du workflow FLUX 3 (nœud 3.5a, header Authorization) ; `rag.resolve_chunk_hierarchy` ne lie que L1→L0 (les sous-sections v5.0.0 rattachées à un L1 restent orphelines sans rejouer `rag_rattache_sous_sections_v5` après toute nouvelle ingestion) ; C8-002, C5-002, C8-003 non réglés.
+~~Publier le brouillon FLUX 3 (v5.1.0 + QQOQCCP v1.1.0 + retouches 3.8b/retry/garde 3.6f), mesurer le taux QQOQCCP sur un fichier test, puis décider de ré-ingérer les 7 fichiers ; fiabiliser la passe 2 QQOQCCP de FLUX 3~~ (fait du 25 au 27/09, ci-dessus) ; variabilité du texte d'une exécution à l'autre (la passe 1 Gemini réécrit le contenu : même fichier, volumes différents entre deux ingestions) ; SC3-005 (CCAG app p35 perdu) ; latence des lectures intégrales Gemini (p95 réel 21,8 s) ; rendre FLUX 3 observable (réponse d'erreur explicite au lieu du 200 vide, ou file d'ingestion pgmq) ; normalisation des normes côté FTS (« NF P03-001 » vs « NF P 03-001 », tokenisation divergente entre requête et entité) ; flash — SC5-005 gagnée par gemini-2.5-flash (SC5-007 et SC5-008 passent avec gpt-4o-mini dans `baseline-v2.4.0-flux3`) là où gpt-4o-mini échoue : piste par intention (C5 « procédure » seulement) ou correction de la boucle en amont (règle de forme plus stricte, `stopSequences`) ; Cohere dès que la clé est posée (campagne `s5-cohere` vs `baseline-v2.4.0-flux3`) ; mineurs R-S3c non traités (motif `usageMetadata` dupliqué, `candidateCount` cross-ref/targeted, enfants ciblés orphelins après rerank, buffer SSE final, usage avant throw dans `gemini-agent`, boucle à cheval sur deux morceaux, `logQuery` Phase B, payload `agentic` du repli sans `steps`) ; mineurs des revues du sprint (`fts_entites_a` renvoie `' '` au lieu de `NULL` quand normes et lots sont vides, sans effet sur le tsvector ; le commentaire de rollback FTS ne mentionne pas `DROP FUNCTION` ; `insertedDocs` réinitialisé deux fois dans `ingest-documents`) ; clé LlamaParse en clair dans la définition du workflow FLUX 3 (nœud 3.5a, header Authorization) ; `rag.resolve_chunk_hierarchy` ne lie que L1→L0 (les sous-sections v5.0.0 rattachées à un L1 restent orphelines sans rejouer `rag_rattache_sous_sections_v5` après toute nouvelle ingestion) ; C8-002 et C8-003 non réglés (C5-002 gagnée par le corpus réparé).
 
 ---
 
