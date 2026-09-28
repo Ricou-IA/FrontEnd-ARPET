@@ -739,3 +739,43 @@ Lecture : FLUX 3 réparé rend l'enrichissement QQOQCCP complet et fiable (5,8 %
 ---
 
 *Document généré à partir de l'audit du 2026-06-12 (lecture complète de `baikal-retrieval` v2.0.0, de `rag.match_documents_v14` en production, de la config live `config.agent_prompts` et des statistiques du corpus).*
+
+### 7.7 Bascule des modèles — gemini-3.8-flash (2026-09-27/28, `baikal-retrieval` v2.5.0 → v2.5.1, migration `rag_modeles_gemini_3_8`)
+
+Déclencheur : Google coupe Gemini 2.5 à partir du 16/10/2026 (date « au plus tôt », des coupures anticipées sont signalées), et gpt-4o-mini, modèle de 2024, était le goulot identifié en fin de Sprint 4 (recall 97-100 %, mais bon extrait fourni et « pas trouvé » ou fait omis).
+
+Campagne A/B de génération sur extraits (`s5-gen-*`, surcharge `--llm-model`, contre `baseline-v2.4.0-bessieres`, 1 passage) :
+
+| Modèle | Réel (35) | Synthétique (60) | Fidélité réel / synth | p50 réel | Coût / question (tarifs du 27/09) |
+|---|---|---|---|---|---|
+| gpt-4o-mini (référence) | 31 | 47 | 0,666 / 0,704 | 3,6 s | 0,0022 $ |
+| **gemini-3.8-flash** | **32** | **50** | **0,704 / 0,727** | 4,0 s | 0,0079 $ |
+| gemini-3.5-flash | 31 | 49 | 0,650 / 0,666 | 4,0 s | 0,0153 $ |
+| gpt-6-luna | 28 | 50 | 0,581 / 0,665 | 5,3 s | 0,0020 $ |
+| gpt-6-sol | 27 | 46 | 0,635 / 0,656 | 6,1 s | 0,0156 $ |
+
+Aucune boucle de répétition sur les modèles Gemini 3.x ni GPT-6 (plus longue séquence d'un même caractère : 4 ; gemini-2.5-flash bouclait dans 3-6 % des réponses). gemini-3.8-flash gagne C8-003 (échec stable depuis le Sprint 1), SC5-005, SC5-008, SC6-006, C1-006 ; ses pertes lues (C1-007, C2-001) sont des réponses justes et plus détaillées sans le mot-clé exact. Réponses environ deux fois plus longues et plus nuancées (ex. délai global : 12 mois au marché et 9 mois proposés au mémoire technique).
+
+Décision d'Eric (27/09) : bascule sur gemini-3.8-flash. En production depuis le 27/09 à 23:55 : génération sur extraits, lecture intégrale, comparaisons et agent en gemini-3.8-flash ; condensation des suivis en gemini-3.5-flash-lite (3.8-flash trop lent : médiane 838 ms, 2/6 sous 800 ms ; 3.5-flash-lite : 711 ms, 6/6), délai porté à 1 000 ms ; repli OpenAI gpt-6-luna. Tarif 3.8-flash garanti jusqu'au 31/12/2026, en hausse ensuite.
+
+Code (repo Baikal) :
+- v2.5.0 : OpenAI en `max_completion_tokens` (accepté par tous les modèles de chat) avec second essai sans température quand le modèle la refuse ; `generation/gemini-thinking.ts` — les tokens de réflexion comptent dans `maxOutputTokens` et les réglages acceptés varient d'un modèle 3.x à l'autre (relevé du 27/09 : 3.5-flash-lite refuse `thinkingBudget 0`, 3.8-flash refuse `thinkingLevel minimal`, 3.1-pro refuse les deux) → liste de réglages essayés dans l'ordre, le suivant sur un 400 ; profil « sans réflexion » (extraits, lecture intégrale, condensation) et profil « agent » (`thinkingLevel low`).
+- v2.5.1 : Gemini 3 exige qu'on lui rende la part d'appel d'outil avec sa `thoughtSignature` ; l'agent reconstruisait l'historique sans elle → 400 au second tour et repli silencieux sur le chemin rapide (agentique 26 % → 3 % dans la première campagne de contrôle). Corrigé, vérifié sur l'API réelle. 173 tests.
+
+Campagne de contrôle en production (`baseline-v2.5.1{,-synth}`, nouvelle référence) :
+
+| Métrique | baseline-v2.4.0-bessieres | baseline-v2.5.1 |
+|---|---|---|
+| Critères réel | 31/35 | 30/35 |
+| Critères synthétique | 47/60 | 49/60 |
+| Recall réel / synth | 97 % / 96 % | 97 % / 100 % |
+| Agentique réel | 20 % | 23 % |
+| p50 / p95 réel | 3,6 s / 13,0 s | 4,4 s / 22,1 s |
+| Fidélité réel / synth | 0,666 / 0,704 | 0,638 / 0,690 |
+| Citations réel / synth | 0,848 / 0,663 | 0,731 / 0,693 |
+
+Lecture : gains nets sur les échecs anciens (C8-003, C1-006, SC5-005, SC5-007, SC5-008, SC6-006) ; deux « pertes » sont des refus corrects que le détecteur ne reconnaît pas (C7-004 « le CCTP du gros œuvre n'existe pas », SC7-001 « aucun ascenseur n'est prévu ») ; le reste dans la variance. Le p95 réel est tiré par la lecture intégrale (C4 : 20-24 s en 3.8-flash contre 12-14 s en 2.5-flash-lite).
+
+Ingestion (FLUX 3, n8n) : les passes 3.6d et 3.6i appellent gemini-2.5-flash. Rejeu hors n8n des 13 requêtes exactes du PGC (exécution 36687) : gemini-3.8-flash JSON 5/5 exploitable, QQOQCCP 77/77, découpage plus gros (50 chunks contre 77, même volume de texte), réflexion 31 k tokens contre 91 k, coût ≈ 0,49 $ comme aujourd'hui ; 3.5-flash plus fidèle au découpage actuel mais ×3 ; 3.5-flash-lite éliminé (QQOQCCP 60/77, identifiants faux). À publier par Eric avant le 16/10 : modèle `gemini-3.8-flash` dans les URL de 3.6d et 3.6i et la constante `GEMINI_MODEL` de 3.6e et 3.6m, puis ingestion de contrôle sur le projet « Test ».
+
+Reports : lecture intégrale plus rapide (candidat : 3.5-flash-lite, à mesurer — surcharge `gemini_model` à ajouter au banc) ; détecteur de refus v4 (« n'existe pas », « aucun … n'est prévu ») ; découpage par bornes dans FLUX 3 (la passe 1 recopie tout le document : ~1 centime par page, texte réécrit) ; hors Baikal : TowerControl en `gemini-2.0-flash`, Flux Facture V2 et Légifrance V2 non inventoriés (fermés au MCP), secrets en clair dans des nœuds n8n (LlamaParse 3.5a, Mayer Voice Field Report, GTM Agent).
